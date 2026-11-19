@@ -1,0 +1,32 @@
+.native-only, #window-edges { display: none !important; }
+html.native, .native body { background: transparent; overflow: hidden; }
+.native body::before { display: none; }
+.native .desktop { padding: 0; height: 100dvh; min-height: 0; }
+.native .calendar {
+  width: 100% !important; height: 100% !important; max-width: none; max-height: none;
+  --sheet-fill: calc(.095 + .905 * var(--sheet-alpha) * var(--sheet-alpha));
+  border-radius: 24px;
+}
+.native .day-heading :is(.month-mark,.weekend-mark) {
+  text-shadow: 0 0 3px rgb(var(--popup) / .98), 0 0 7px rgb(var(--popup) / .85);
+}
+.native .current .day-number { text-shadow: none; }
+.native :is(.heading,.weekdays) { text-shadow: 0 0 5px rgb(var(--popup) / .95); }
+.native .heading { cursor: move; user-select: none; }
+.native .resize-handle { display: none; }
+.native .native-only { display: block !important; }
+.native .size-menu .pin-row { display: flex !important; align-items: center; justify-content: space-between; }
+.native .pin-row input { width: 1.15em; height: 1.15em; accent-color: var(--accent); }
+.native .size-menu .quit { margin-top: 8px; font-size: 12px; color: var(--muted); padding: 4px 8px; border-radius: 8px; }
+.native #window-edges { display: contents !important; }
+.native [data-edge] { position: fixed; z-index: 8; touch-action: none; }
+[data-edge="n"], [data-edge="s"] { right: 12px; left: 12px; height: 5px; cursor: ns-resize; }
+[data-edge="n"] { top: 0; } [data-edge="s"] { bottom: 0; }
+[data-edge="e"], [data-edge="w"] { top: 12px; bottom: 12px; width: 5px; cursor: ew-resize; }
+[data-edge="e"] { right: 0; } [data-edge="w"] { left: 0; }
+[data-edge="nw"], [data-edge="ne"], [data-edge="sw"], [data-edge="se"] { width: 13px; height: 13px; }
+[data-edge="nw"] { top: 2px; left: 2px; cursor: nwse-resize; }
+[data-edge="ne"] { top: 2px; right: 2px; cursor: nesw-resize; }
+[data-edge="sw"] { bottom: 2px; left: 2px; cursor: nesw-resize; }
+[data-edge="se"] { bottom: 2px; right: 2px; cursor: nwse-resize; }
+@media (prefers-reduced-transparency: reduce) { .native .refracted-edge { background: rgb(var(--glass) / .96); } }

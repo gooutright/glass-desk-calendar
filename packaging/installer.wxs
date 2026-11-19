@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="E2E5A57D-068D-465F-B682-3CE87330F35B" Name="Glass Desk Calendar" Language="2052" Codepage="936"
+           Version="1.0.0" Manufacturer="Glass Desk Calendar" UpgradeCode="D7ADB131-E9E4-4C1F-B175-C60646A092F9">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Description="Glass Desk Calendar for Windows x64"/>
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Glass Desk Calendar is already installed."/>
+    <MediaTemplate EmbedCab="yes"/>
+    <Icon Id="CalendarIcon" SourceFile="$(var.Icon)"/>
+    <Property Id="ARPPRODUCTICON" Value="CalendarIcon"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder"><Directory Id="LocalPrograms" Name="Programs"><Directory Id="INSTALLFOLDER" Name="GlassDeskCalendar">
+        <Component Id="Application" Guid="C735BA13-B4BC-43B3-8D1A-8ABCBE9F8BC0">
+          <File Id="CalendarExe" Source="$(var.AppDir)/GlassDeskCalendar.exe"/>
+          <File Source="$(var.AppDir)/GlassDeskCalendar.exe.config"/>
+          <File Source="$(var.AppDir)/Microsoft.Web.WebView2.Core.dll"/>
+          <File Source="$(var.AppDir)/Microsoft.Web.WebView2.Wpf.dll"/>
+          <File Source="$(var.AppDir)/WebView2Loader.dll"/>
+          <File Source="$(var.AppDir)/WebView2-LICENSE.txt"/>
+          <File Source="$(var.AppDir)/WebView2-NOTICE.txt"/>
+          <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="桌面月历" Target="[#CalendarExe]" WorkingDirectory="INSTALLFOLDER" Icon="CalendarIcon"/>
+          <Shortcut Id="StartShortcut" Directory="ProgramMenuFolder" Name="Glass Desk Calendar" Target="[#CalendarExe]" WorkingDirectory="INSTALLFOLDER" Icon="CalendarIcon"/>
+          <RemoveFolder Id="RemoveAppDirectory" On="uninstall"/>
+          <RegistryValue Root="HKCU" Key="Software\GlassDeskCalendar\Installer" Name="App" Value="1" Type="integer" KeyPath="yes"/>
+        </Component>
+        <Directory Id="WebDir" Name="web"><Component Id="CalendarPage" Guid="6B136942-EEA3-42B4-8E63-B08928A87357">
+          <File Source="$(var.AppDir)/web/index.html"/><File Source="$(var.AppDir)/web/calendar.css"/>
+          <File Source="$(var.AppDir)/web/desktop.css"/><File Source="$(var.AppDir)/web/calendar.js"/>
+          <RegistryValue Root="HKCU" Key="Software\GlassDeskCalendar\Installer" Name="Web" Value="1" Type="integer" KeyPath="yes"/>
+          <RemoveFolder Id="RemoveWebDirectory" On="uninstall"/>
+        </Component></Directory>
+      </Directory></Directory></Directory>
+      <Directory Id="ProgramMenuFolder"/><Directory Id="DesktopFolder"/>
+    </Directory>
+    <Feature Id="Calendar" Title="Glass Desk Calendar" Level="1"><ComponentRef Id="Application"/><ComponentRef Id="CalendarPage"/></Feature>
+  </Product>
+</Wix>
