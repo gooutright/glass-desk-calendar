@@ -64,7 +64,7 @@
           <label><span data-copy="calendarFont">日历字号</span><input id="size-calendar-font" data-setting="calendarFont" type="range" min="11" max="32"><output id="size-calendar-font-out" for="size-calendar-font"></output></label>
           <label><span data-copy="noteFont">便签字号</span><input id="size-note-font" data-setting="noteFont" type="range" min="11" max="32"><output id="size-note-font-out" for="size-note-font"></output></label>
           <label><span data-copy="leading">清单行距</span><input id="size-leading" data-setting="leading" type="range" min="110" max="210" step="5"><output id="size-leading-out" for="size-leading"></output></label>
-          <label class="native-only pin-row"><span data-copy="desktopMode">固定在桌面</span><input id="pin-window" type="checkbox" checked></label>
+          <label class="native-only pin-row"><span data-copy="desktopMode">固定在桌面</span><input id="pin-window" type="checkbox"></label>
           <a id="holiday-source" target="_blank" rel="noopener noreferrer"></a>
           <p id="calendar-hint" hidden></p>
           <span id="feedback" class="sr-only" role="status"></span>
@@ -110,9 +110,8 @@
   </div>
   <dialog id="task-note" class="note" data-aria="taskNote" aria-describedby="note-date">
     <form id="note-form">
-      <div class="note-meta">
+      <div class="note-meta" data-tip="moveNote">
         <label class="note-project-label"><i class="project-dot"></i><select id="note-project" aria-label="便签项目"></select></label>
-        <svg class="icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="4" width="13" height="13" rx="2.7"/><path d="M6.7 2.7v3M13.3 2.7v3M4 8h12"/></svg>
         <time id="note-date"></time>
       </div>
       <input id="note-title" type="text" data-aria="noteTitle" data-placeholder="noteTitle" autocomplete="off" required>

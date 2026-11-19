@@ -4,7 +4,7 @@ from ctypes import wintypes
 from pathlib import Path
 import tempfile
 from playwright.sync_api import sync_playwright
-from desktop_smoke import EXE, USER32, belongs, start, quit_app, wait_for, window_string, windows
+from desktop_smoke import EXE, USER32, belongs, start, quit_app, wait_for, window_string, windows, note_editor, wait_closed
 
 
 def dock_window(process):
@@ -53,6 +53,7 @@ def run():
             tab=dock.locator(".dock-tab[aria-label=Research]")
             tab.wait_for()
             assert tab.inner_text()=="Research", "A folded folder must show its project name"
+            assert tab.locator("i,svg,img").count()==0, "Folded project tabs are text only"
             assert tab.evaluate("""b=>{
                 const name=b.querySelector('.folder-name'), bounds=b.getBoundingClientRect();
                 return name && getComputedStyle(name).writingMode==='vertical-rl' &&
@@ -75,11 +76,12 @@ def run():
             assert dock.locator("#project-panel").is_hidden()
             tab.click()
             dock.locator(".dock-item").first.click()
-            main.locator("#task-note[open]").wait_for()
-            assert main.locator("#note-title").input_value()=="Report"
-            assert main.locator("#note-project").input_value()==a
-            main.locator("#note-project").select_option(b)
-            main.locator("#note-cancel").click()
+            editor=note_editor(main,ids[0])
+            assert editor.locator("#note-title").input_value()=="Report"
+            assert editor.locator("#note-project").input_value()==a
+            editor.locator("#note-project").select_option(b)
+            editor.locator("#note-cancel").click()
+            wait_closed(main,editor)
             assert main.evaluate("(id)=>CalendarActions.list().find(e=>e.id===id).projectId",ids[0])==a
             cell=main.locator(".day[data-date='2026-10-01']")
             assert cell.locator(".day-number + .holiday-mark").is_visible()
@@ -88,9 +90,10 @@ def run():
             assert main.locator(".weekdays span").all_text_contents()[0]=="周日"
             cell.locator("textarea").first.click(button="right")
             main.locator('[data-action="edit"]').click()
-            main.locator("#note-project").select_option(b)
-            main.locator("#note-form [type=submit]").click()
-            main.locator("#task-note").wait_for(state="hidden")
+            editor=note_editor(main,ids[0])
+            editor.locator("#note-project").select_option(b)
+            editor.locator("#note-form [type=submit]").click()
+            wait_closed(main,editor)
             assert cell.locator(".check").first.evaluate("(e)=>getComputedStyle(e).backgroundColor")=="rgb(181, 102, 119)"
             cell.locator(".check").first.check()
             assert main.evaluate("(id)=>CalendarActions.list().find(e=>e.id===id).done",ids[0])

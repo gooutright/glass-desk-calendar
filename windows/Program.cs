@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
@@ -15,8 +16,8 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("Glass Desk Calendar")]
 [assembly: AssemblyProduct("Glass Desk Calendar")]
-[assembly: AssemblyVersion("1.2.1.0")]
-[assembly: AssemblyFileVersion("1.2.1.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace GlassDeskCalendar
 {
@@ -56,8 +57,10 @@ namespace GlassDeskCalendar
         readonly System.Windows.Threading.DispatcherTimer geometryDelay = new System.Windows.Threading.DispatcherTimer();
         RecordExport exporter;
         ProjectDockWindow dock;
-        bool english, closing;
-        bool wantedPin = true;
+        readonly Dictionary<string,NoteWindow> notes=new Dictionary<string,NoteWindow>();
+        CoreWebView2Environment environment;
+        bool english, closing, exitRequested;
+        bool wantedPin;
         Rectangle? previousBounds;
         string GeometryFile { get { return Path.Combine(folder,"window.txt"); } }
 
@@ -81,11 +84,16 @@ namespace GlassDeskCalendar
             TrayText(); tray.Visible=true;
             tray.DoubleClick += delegate { ShowAsWindow(); };
             SourceInitialized += delegate {
-                position = new DesktopPlacement(new WindowInteropHelper(this).Handle,ScheduleGeometrySave);
+                position = new DesktopPlacement(new WindowInteropHelper(this).Handle,ScheduleGeometrySave,350,320,24);
                 position.Place(previousBounds ?? position.DefaultBounds());
             };
             Loaded += OpenPage;
-            Closing += delegate {
+            Closing += delegate(object sender,System.ComponentModel.CancelEventArgs e) {
+                if (notes.Count>0) {
+                    e.Cancel=true; exitRequested=true;
+                    foreach (NoteWindow editor in notes.Values) { editor.RequestClose(); break; }
+                    return;
+                }
                 closing=true;
                 geometryDelay.Stop();
                 if (position!=null) { position.Stop(); SaveState(); }
@@ -159,6 +167,7 @@ namespace GlassDeskCalendar
                 if (testing)
                     options.AdditionalBrowserArguments="--remote-debugging-address=127.0.0.1 --remote-debugging-port="+testPort.ToString(CultureInfo.InvariantCulture);
                 var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(folder,"WebView2"),options);
+                environment=env;
                 await view.EnsureCoreWebView2Async(env);
                 if (closing) return;
                 var core=view.CoreWebView2;
@@ -184,8 +193,7 @@ namespace GlassDeskCalendar
                 core.Navigate(Address);
                 dock=new ProjectDockWindow(env,delegate{return position.Bounds;},delegate{return position.Pinned;},delegate(string id){
                     if(closing)return;
-                    if(!position.Pinned)Activate();
-                    core.PostWebMessageAsString("open-note|"+id);view.Focus();
+                    core.PostWebMessageAsString("open-note|"+id);
                 },Log);
                 dock.Show();
             } catch (WebView2RuntimeNotFoundException ex) {
@@ -197,6 +205,28 @@ namespace GlassDeskCalendar
                 Log(ex); MessageBox.Show("月历未能启动。\n"+ex.Message,"Glass Desk Calendar",MessageBoxButton.OK,MessageBoxImage.Error); Close();
             }
         }
+        void OpenNote(string command)
+        {
+            string[] parts=command.Split('|');
+            int x,y,w,h;
+            if (parts.Length!=6 || parts[1].Length==0 || parts[1].Length>200 ||
+                !int.TryParse(parts[2],out x) || !int.TryParse(parts[3],out y) ||
+                !int.TryParse(parts[4],out w) || !int.TryParse(parts[5],out h)) return;
+            string id=Uri.UnescapeDataString(parts[1]);
+            NoteWindow editor;
+            if (notes.TryGetValue(id,out editor)) { editor.Raise(); return; }
+            double scale=position.Scale;
+            Rectangle frame=position.Bounds;
+            var bounds=new Rectangle(frame.Left+(int)Math.Round(x*scale),frame.Top+(int)Math.Round(y*scale),
+                Math.Max(1,(int)Math.Round(w*scale)),Math.Max(1,(int)Math.Round(h*scale)));
+            editor=new NoteWindow(environment,id,bounds,delegate {exitRequested=false;},Log);
+            notes.Add(id,editor);
+            editor.Closed+=delegate {
+                notes.Remove(id);
+                if (exitRequested) Dispatcher.BeginInvoke(new Action(Close));
+            };
+            editor.Show(); editor.Raise();
+        }
         void OnMessage(object sender,CoreWebView2WebMessageReceivedEventArgs e)
         {
             if (closing || position==null || e.Source!=Address) return;
@@ -205,12 +235,13 @@ namespace GlassDeskCalendar
             if (cmd=="state") SendState();
             else if (cmd=="pin" || cmd=="float") SetPinned(cmd=="pin");
             else if (cmd=="quit") Dispatcher.BeginInvoke(new Action(Close));
+            else if (cmd.StartsWith("edit-note|",StringComparison.Ordinal)) OpenNote(cmd);
             else if (cmd.StartsWith("export|",StringComparison.Ordinal)) {
                 Dispatcher.BeginInvoke(new Action(delegate { exporter.Save(cmd,english); }));
             }
             else if (cmd=="reset-size") { position.Place(position.DefaultBounds()); SaveState(); }
             else if (cmd=="lang=en-US" || cmd=="lang=zh-CN") { english=cmd=="lang=en-US"; TrayText(); }
-            else if (cmd.StartsWith("drag=",StringComparison.Ordinal)) position.BeginDrag(cmd.Substring(5));
+            else if (cmd.StartsWith("drag=",StringComparison.Ordinal)) Dispatcher.BeginInvoke(new Action(delegate { if(!closing)position.BeginDrag(cmd.Substring(5)); }));
             else {
                 string[] pair=cmd.Split('='); int dip;
                 if (pair.Length==2 && (pair[0]=="width" || pair[0]=="height") && int.TryParse(pair[1],out dip) && dip>0 && dip<=65535) position.Resize(pair[0],dip);

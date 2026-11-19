@@ -4,7 +4,7 @@ from datetime import date
 import base64
 import tempfile
 from playwright.sync_api import sync_playwright
-from desktop_smoke import EXE, start, quit_app, native_export
+from desktop_smoke import EXE, start, quit_app, native_export, note_editor, wait_closed
 
 
 def slider(page, selector, value):
@@ -15,6 +15,7 @@ def slider(page, selector, value):
 def open_note(page):
     page.locator(".day.current .task").first.click(button="right")
     page.locator('[data-action="edit"]').click()
+    return note_editor(page)
 
 
 def run():
@@ -35,71 +36,77 @@ def run():
             assert page.locator(".day-number").first.evaluate("e=>getComputedStyle(e).fontSize")=="23px"
             assert page.locator(".day.current .task").first.evaluate("e=>getComputedStyle(e).fontSize")=="19px"
             page.locator("#settings-close").click()
-            open_note(page)
-            assert page.locator("#task-note").evaluate("""n=>{
-              const box=e=>e.getBoundingClientRect(), d=box(document.querySelector('.day.current')), r=box(n);
+            editor=open_note(page)
+            body=editor.locator("#note-body")
+            cell=page.locator(".day.current").bounding_box()
+            assert editor.locator("#task-note").evaluate("""(n,d)=>{
+              const box=e=>e.getBoundingClientRect(), r=box(n);
               const body=box(n.querySelector('#note-document')),tools=box(n.querySelector('#note-format')),actions=box(n.querySelector('.note-actions'));
               return r.width/d.width>2.9 && r.width/d.width<3.2 && r.height/d.height>2.9 && r.height/d.height<3.2 &&
               tools.top>=body.bottom-1 && actions.top>=tools.bottom-1 && r.left>=0 && r.bottom<=innerHeight;
-            }"""), "Three by three calendar cells with the tools between text and actions"
-            body=page.locator("#note-body")
+            }""",cell), "Three by three calendar cells with the tools between text and actions"
             body.fill("前重点后")
             body.press("Home")
             body.press("ArrowRight")
             body.press("Shift+ArrowRight")
             body.press("Shift+ArrowRight")
-            page.locator("#format-size").select_option("24px")
-            page.locator("#format-bold").click()
-            page.locator("#format-underline").click()
+            editor.locator("#format-size").select_option("24px")
+            editor.locator("#format-bold").click()
+            editor.locator("#format-underline").click()
             for selector,color in [("#format-color","#ac3245"),("#format-highlight","#ffe681")]:
-                page.locator(selector).fill(color)
-                page.locator(selector).dispatch_event("change")
-            page.locator("#note-save").click()
-            page.locator("#task-note").wait_for(state="hidden")
+                editor.locator(selector).fill(color)
+                editor.locator(selector).dispatch_event("change")
+            editor.locator("#note-save").click()
+            wait_closed(page,editor)
             record=page.evaluate("CalendarActions.list()[0]")
             assert record["note"]=="前重点后",record
             span=record["noteStyles"]
             assert len(span)==1 and (span[0]["start"],span[0]["end"])==(1,3),span
             assert span[0]["attributes"]==dict(size="24px",bold=True,underline=True,color="#ac3245",background="#ffe681"),span
-            open_note(page)
+            editor=open_note(page)
+            body=editor.locator("#note-body")
             assert body.locator("strong").inner_text()=="重点"
             body.press("Control+End")
-            page.locator("#format-bold").click()
-            page.keyboard.insert_text("新字")
-            page.locator("#note-cancel").click()
+            editor.locator("#format-bold").click()
+            editor.keyboard.insert_text("新字")
+            editor.locator("#note-cancel").click()
+            wait_closed(page,editor)
             assert page.evaluate("CalendarActions.list()[0].note")=="前重点后"
-            open_note(page)
+            editor=open_note(page)
+            body=editor.locator("#note-body")
             body.press("Control+End")
-            page.locator("#format-bold").click()
-            page.keyboard.insert_text("新字")
-            page.locator("#note-save").click()
-            page.locator("#task-note").wait_for(state="hidden")
+            editor.locator("#format-bold").click()
+            editor.keyboard.insert_text("新字")
+            editor.locator("#note-save").click()
+            wait_closed(page,editor)
             current=page.evaluate("CalendarActions.list()[0]")
             assert current["note"]=="前重点后新字" and current["noteStyles"][-1]["attributes"]=={"bold":True},current
         finally:
             quit_app(proc,page)
         proc,page=start(pw.chromium,profile)
         try:
-            open_note(page)
-            assert page.locator("#note-body").inner_text()=="前重点后新字"
-            assert page.locator("#format-bold").get_attribute("title")
-            body=page.locator("#note-body")
+            editor=open_note(page)
+            body=editor.locator("#note-body")
+            assert editor.locator("#note-body").inner_text()=="前重点后新字"
+            assert editor.locator("#format-bold").get_attribute("title")
             body.press("Control+Home")
             body.press("ArrowRight")
             body.press("ArrowRight")
             png64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2L0AAAAASUVORK5CYII="
-            page.locator("#note-files").set_input_files({"name":"mark.png","mimeType":"image/png","buffer":base64.b64decode(png64)})
-            page.wait_for_function("document.querySelector('#note-document img')?.naturalWidth===1")
-            page.locator("#note-save").click()
-            page.locator("#task-note").wait_for(state="hidden")
+            editor.locator("#note-files").set_input_files({"name":"mark.png","mimeType":"image/png","buffer":base64.b64decode(png64)})
+            editor.wait_for_function("document.querySelector('#note-document img')?.naturalWidth===1")
+            editor.locator("#note-save").click()
+            wait_closed(page,editor)
             marked=page.evaluate("CalendarActions.list()[0]")
             assert marked["noteImages"][0]["at"]==2 and marked["noteStyles"]==current["noteStyles"]
-            open_note(page)
-            page.locator(".note-photo-view").click()
-            page.locator("#photo-close").click()
-            page.locator(".note-photo-remove").click()
-            assert page.locator(".note-photo").count()==0
-            page.locator("#note-cancel").click()
+            editor=open_note(page)
+            body=editor.locator("#note-body")
+            editor.locator(".note-photo-view").click()
+            editor.locator("#photo-close").click()
+            editor.locator(".note-photo-remove").click()
+            assert editor.locator(".note-photo").count()==0
+            editor.locator("#note-cancel").click()
+            wait_closed(page,editor)
             page.locator("#settings-toggle").click()
             assert page.locator("#size-calendar-font").input_value()=="23" and page.locator("#size-note-font").input_value()=="19"
             page.locator("#language").select_option("en-US")

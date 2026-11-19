@@ -25,6 +25,7 @@ USER32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 USER32.GetWindowThreadProcessId.argtypes = [wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
 USER32.GetParent.argtypes = [wintypes.HWND]
 USER32.GetParent.restype = wintypes.HWND
+USER32.GetShellWindow.restype = wintypes.HWND
 USER32.FindWindowExW.argtypes = [wintypes.HWND,wintypes.HWND,wintypes.LPCWSTR,wintypes.LPCWSTR]
 USER32.FindWindowExW.restype = wintypes.HWND
 USER32.GetDlgCtrlID.argtypes=[wintypes.HWND]
@@ -67,6 +68,7 @@ def native_export(page, process, selector, path):
     page.locator(selector).click()
     dialog = wait_for(lambda: next((h for h in windows() if belongs(h,process) and
                                     window_string(USER32.GetClassNameW,h)=="#32770"),None))
+    assert USER32.IsWindowEnabled(USER32.GetShellWindow()), "The file picker must leave desktop icons usable"
     # The file name box in the common Windows Save As dialog is control 1001.
     edit = wait_for(lambda: next((h for h in windows(dialog) if USER32.GetDlgCtrlID(h)==1001
                                   and window_string(USER32.GetClassNameW,h)=="Edit"),None))
@@ -128,8 +130,32 @@ def start(browser_api, directory):
         raise
 
 
+def note_editor(main, record_id=None):
+    from urllib.parse import parse_qs, urlsplit
+    def find():
+        main.wait_for_timeout(40)
+        for page in main.context.pages:
+            ids=parse_qs(urlsplit(page.url).query).get("note",[])
+            if ids and (record_id is None or ids==[record_id]):
+                return page
+    editor=wait_for(find)
+    editor.locator("#task-note[open]").wait_for()
+    return editor
+
+
+def wait_closed(main, editor):
+    def closed():
+        main.wait_for_timeout(35)
+        return editor.is_closed()
+    wait_for(closed)
+
+
 def quit_app(process, page):
     try:
+        for child in list(page.context.pages):
+            if "?note=" in child.url and not child.is_closed():
+                cancel=child.locator("#note-cancel")
+                if cancel.is_visible(): cancel.click()
         for h in windows():
             if belongs(h,process) and window_string(USER32.GetClassNameW,h)=="#32770":
                 USER32.SendMessageW(USER32.GetDlgItem(h,2),0x00F5,0,None)
@@ -152,7 +178,7 @@ def run():
             def shell_parent():
                 parent=USER32.GetParent(hwnd)
                 return parent and USER32.FindWindowExW(parent,None,"SHELLDLL_DefView",None)
-            wait_for(shell_parent)
+            assert not shell_parent(), "Fresh installations should float like other desktop notes"
             assert page.locator(".day").count() in (28, 35, 42)
             assert page.locator(".day-number").evaluate_all("(ns)=>ns.every(n=>getComputedStyle(n).color==='rgb(20, 41, 59)')")
             assert page.locator(".day:not(.outside)").evaluate_all("(ns)=>ns.every(n=>getComputedStyle(n).borderTopLeftRadius==='8px')")
@@ -166,17 +192,19 @@ def run():
             task.fill("Windows desktop smoke test")
             task.click(button="right")
             page.locator('[data-action="edit"]').click()
-            page.locator("#note-body").fill("before")
-            page.locator("#note-body").press("End")
-            page.locator("#note-files").set_input_files({"name":"proof.png","mimeType":"image/png","buffer":png})
-            page.keyboard.insert_text("after")
-            page.locator("#note-form [type=submit]").click()
-            page.locator("#task-note").wait_for(state="hidden")
+            editor=note_editor(page)
+            editor.locator("#note-body").fill("before")
+            editor.locator("#note-body").press("End")
+            editor.locator("#note-files").set_input_files({"name":"proof.png","mimeType":"image/png","buffer":png})
+            editor.keyboard.insert_text("after")
+            editor.locator("#note-form [type=submit]").click()
+            wait_closed(page,editor)
             page.locator("#settings-toggle").click()
-            page.locator("#pin-window").uncheck()
-            wait_for(lambda: not shell_parent())
             page.locator("#pin-window").check()
-            wait_for(shell_parent)
+            wait_for(lambda: (profile/"window.txt").read_text().strip().endswith(",1"))
+            assert not shell_parent() and USER32.IsWindowEnabled(USER32.GetShellWindow())
+            page.locator("#pin-window").uncheck()
+            wait_for(lambda: (profile/"window.txt").read_text().strip().endswith(",0"))
             page.locator("#language").select_option("en-US")
             assert page.locator("#settings-toggle").inner_text() == "Settings"
             page.locator("#size-width").evaluate("(e) => {e.value=680; e.dispatchEvent(new Event('input',{bubbles:true}));}")
@@ -184,6 +212,7 @@ def run():
             page.locator("#size-height").evaluate("(e) => {e.value=510; e.dispatchEvent(new Event('input',{bubbles:true}));}")
             page.wait_for_function("Math.abs(innerHeight-510)<4")
             page.locator("#transparency").evaluate("(e)=>{e.value=85;e.dispatchEvent(new Event('input',{bubbles:true}));}")
+            page.locator("#pin-window").check()
             assert page.locator("#transparency-value").inner_text() == "85%"
             assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgba(0, 0, 0, 0)"
             print("PASS desktop pin/unpin, monthly/year views, click-to-write, native size, transparency, note with an image.")
@@ -197,11 +226,12 @@ def run():
             assert page.locator("#transparency-value").inner_text()=="85%"
             task.click(button="right")
             page.locator('[data-action="edit"]').click()
-            page.wait_for_function("document.querySelector('#note-document img')?.naturalWidth===1")
+            editor=note_editor(page)
+            editor.wait_for_function("document.querySelector('#note-document img')?.naturalWidth===1")
             content=page.evaluate("CalendarActions.list().find(e=>e.text==='Windows desktop smoke test')")
             assert content["note"]=="beforeafter" and content["noteImages"][0]["at"]==6
-            page.locator("#note-form [type=submit]").click()
-            page.locator("#task-note").wait_for(state="hidden")
+            editor.locator("#note-form [type=submit]").click()
+            wait_closed(page,editor)
             print("PASS full restart preserved window, language, task, image, inline text and transparency.")
             name="Calendar_"+date.today().isoformat()
             csv_path, html_path = profile/(name+".csv"),profile/(name+".html")

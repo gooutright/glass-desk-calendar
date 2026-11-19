@@ -11,6 +11,8 @@ html.native, .native body { background: transparent; overflow: hidden; }
   text-shadow: 0 0 3px rgb(var(--popup) / .98), 0 0 7px rgb(var(--popup) / .85);
 }
 .native .current .day-number { text-shadow: none; }
+.note-window .desktop, html.note-window #window-edges { display: none !important; }
+.note-window .note { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; box-shadow: inset 0 1px 1px var(--rim); }
 .native :is(.refracted-edge,.month-nav,.opacity-control,#settings-toggle,.size-menu,.task-menu,.note) {
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }

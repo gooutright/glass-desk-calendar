@@ -2,8 +2,10 @@
   "use strict";
   const host = window.chrome?.webview;
   const isDesktop = Boolean(host) && location.hostname === "calendar.example";
+  const detachedId = isDesktop ? new URLSearchParams(location.search).get("note") : null;
   const projects = window.CalendarProjects;
   document.documentElement.classList.toggle("native", isDesktop);
+  document.documentElement.classList.toggle("note-window", Boolean(detachedId));
   const recordKey = "desktop-calendar-sketch.records.v1";
   const transparencyKey = "desktop-calendar-sketch.transparency.v1";
   const sizeKey = "desktop-calendar-sketch.size.v1";
@@ -64,6 +66,8 @@
     cancelNote: ["取消", "Cancel"], saveNote: ["保存", "Save"], titleRequired: ["请填写待办标题", "Enter a task title"],
     desktopMode: ["固定在桌面", "Pin to desktop"], quitApp: ["退出月历", "Quit calendar"],
     moveWindow: ["拖动标题移动月历", "Drag the heading to move the calendar"],
+    moveNote: ["拖动日期栏移动笔记", "Drag the date bar to move the note"],
+    discardDraft: ["放弃这篇笔记尚未保存的修改？", "Discard unsaved changes to this note?"],
     closeSettings: ["关闭设置", "Close settings"],
     height: ["月历高度", "Calendar height"], calendarFont: ["日历字号", "Calendar font size"], noteFont: ["便签字号", "Note font size"], leading: ["清单行距", "Line spacing"],
     reset: ["恢复默认大小", "Reset sizes"], export: ["导出记录", "Export records"], exportHelp: ["导出所有月份的记录为 CSV", "Export all months as CSV"],
@@ -265,6 +269,7 @@
   }
 
   function queueLayout() {
+    if (detachedId) return;
     if (layoutFrame) return;
     layoutFrame = requestAnimationFrame(() => {
       layoutFrame = 0;
@@ -593,7 +598,7 @@
     projects.langChanged();
     noteBody.dataset.placeholder = t("notePrompt");
     document.title = t("title");
-    if (isDesktop) host.postMessage("lang=" + locale);
+    if (isDesktop && !detachedId) host.postMessage("lang=" + locale);
     document.getElementById("language").value = locale;
     panel.style.setProperty("--write-hint", JSON.stringify(t("write")));
     document.querySelectorAll("input[data-placeholder],textarea[data-placeholder]").forEach(node => { node.placeholder = t(node.dataset.placeholder); });
@@ -601,7 +606,7 @@
     document.querySelectorAll("[data-aria]").forEach(node => node.setAttribute("aria-label", t(node.dataset.aria)));
     document.querySelectorAll("[data-tip]").forEach(node => { node.title = t(node.dataset.tip); });
     setFeedback(feedbackCode);
-    renderMonth();
+    if (!detachedId) renderMonth();
     if (!sizeMenu.hidden) syncSizeControls();
   }
   document.getElementById("language").addEventListener("change", event => {
@@ -808,6 +813,7 @@
   const fullPhoto = document.getElementById("photo-original");
   let menuRow = null;
   let noteRow = null;
+  let movedNote = null;
   let draft = null;
   let databasePromise = null;
   const rich = CalendarRichNote.create(noteDocument,paintPhoto);
@@ -1040,9 +1046,8 @@
     menuItems[0].focus({preventScroll: true});
   }
 
-  function positionNote() {
-    if (!noteRow?.isConnected) return;
-    const cell = noteRow.closest(".day").getBoundingClientRect();
+  function noteBounds(row) {
+    const cell = row.closest(".day").getBoundingClientRect();
     const frame = panel.getBoundingClientRect();
     const left = Math.max(6, frame.left + 6);
     const right = Math.min(document.documentElement.clientWidth - 6, frame.right - 6);
@@ -1053,27 +1058,47 @@
     const height = Math.min(bottom - top, Math.max(240, cell.height * 3 + 2 * parseFloat(grid.rowGap)));
     const x = cell.left + cell.width / 2 - width / 2;
     const y = cell.top + cell.height / 2 - height / 2;
-    note.style.width = Math.round(width) + "px";
-    note.style.height = Math.round(height) + "px";
-    note.style.left = Math.round(clampWithin(x, left, right - width)) + "px";
-    note.style.top = Math.round(clampWithin(y, top, bottom - height)) + "px";
+    return [clampWithin(x,left,right-width),clampWithin(y,top,bottom-height),width,height].map(Math.round);
+  }
+  function placeInViewport(x,y) {
+    const rect=note.getBoundingClientRect();
+    note.style.left=clampWithin(x,0,innerWidth-rect.width)+"px";
+    note.style.top=clampWithin(y,0,innerHeight-rect.height)+"px";
+  }
+  function positionNote() {
+    if (detachedId) return;
+    if (movedNote) { placeInViewport(movedNote.x,movedNote.y); return; }
+    if (!noteRow?.isConnected) return;
+    const [x,y,w,h]=noteBounds(noteRow);
+    note.style.width=w+"px"; note.style.height=h+"px";
+    note.style.left=x+"px"; note.style.top=y+"px";
   }
 
   function openNote(row) {
+    if (note.open) { rich.focus(); return; }
     if (!pendingChanges.length) try { records = readRecords(); } catch {}
     const item = records.find(record => record.id === row.dataset.id);
     if (!item || !row.isConnected) return;
-    noteRow = row;
+    if (isDesktop) {
+      host.postMessage(["edit-note",encodeURIComponent(item.id),...noteBounds(row)].join("|"));
+      return;
+    }
+    noteRow=row;
+    showNote(item);
+  }
+  function displayNoteDate(date) {
     const dateLabel = document.getElementById("note-date");
-    dateLabel.dateTime = item.date;
-    const [year, monthNumber, day] = item.date.split("-").map(Number);
-    dateLabel.textContent = new Intl.DateTimeFormat(locale, {dateStyle: "full"}).format(new Date(year, monthNumber - 1, day));
+    dateLabel.dateTime=date;
+    dateLabel.textContent=new Intl.DateTimeFormat(locale,{dateStyle:"full"}).format(new Date(date+"T12:00:00"));
+  }
+  function showNote(item) {
+    displayNoteDate(item.date);
     noteTitle.value = item.text;
     projects.selectOptions(document.getElementById("note-project"),item.projectId);
     noteTitle.setCustomValidity("");
     fillNoteDocument(item);
     positionNote();
-    note.showModal();
+    note.show();
     rich.focus();
   }
 
@@ -1081,9 +1106,66 @@
     if (draft?.saving) return;
     const row = noteRow;
     noteRow = null;
+    movedNote = null;
     note.close();
     resetPhotoDraft();
+    if (detachedId) host.postMessage("note-close");
     if (row?.isConnected) row.querySelector(".task").focus({preventScroll: true});
+  }
+
+  const noteHeader=note.querySelector(".note-meta");
+  let noteGrab=null;
+  noteHeader.addEventListener("pointerdown",event=>{
+    if (!event.isPrimary || event.button!==0 || event.target.closest("label,button,select")) return;
+    event.preventDefault();
+    if (detachedId) { host.postMessage("drag=move"); return; }
+    const rect=note.getBoundingClientRect();
+    noteGrab={id:event.pointerId,x:event.clientX-rect.left,y:event.clientY-rect.top};
+    noteHeader.setPointerCapture(event.pointerId);
+  });
+  noteHeader.addEventListener("pointermove",event=>{
+    if (!noteGrab || noteGrab.id!==event.pointerId) return;
+    movedNote={x:event.clientX-noteGrab.x,y:event.clientY-noteGrab.y};
+    placeInViewport(movedNote.x,movedNote.y);
+  });
+  noteHeader.addEventListener("lostpointercapture",()=>{noteGrab=null;});
+
+  // All native editors submit through the calendar so simultaneous writes to the
+  // one local record list cannot replace independent edits made in another window.
+  const noteChannel=isDesktop ? new BroadcastChannel("glass-calendar.note-commits.v1") : null;
+  let awaitingCommit=null;
+  function syncNoteRow(item,patch) {
+    const row=[...days.querySelectorAll(".entry")].find(node=>node.dataset.id===item.id);
+    if (!row) return;
+    const area=row.querySelector(".task");
+    if (Object.hasOwn(patch,"text") && area.value!==item.text) {
+      area.value=item.text; fit(area);
+      row.querySelector(".check").setAttribute("aria-label",t("check")+" "+item.text);
+    }
+    if (Object.hasOwn(patch,"projectId")) projects.tagRow(row,item.projectId);
+  }
+  if (noteChannel) noteChannel.onmessage=({data})=>{
+    if (!detachedId && data.kind==="save") {
+      let error=null;
+      try {
+        if (Object.hasOwn(data.patch,"text") && composing.has(document.activeElement) &&
+            document.activeElement.closest(".entry")?.dataset.id===data.original.id) throw new Error("noteConflict");
+        changeRecord(data.original.id,data.patch,false,data.original);
+        syncNoteRow(records.find(item=>item.id===data.original.id),data.patch);
+      } catch (ex) { error=ex.message; }
+      noteChannel.postMessage({kind:"result",request:data.request,error});
+    } else if (data.kind==="result" && awaitingCommit?.id===data.request) {
+      const pending=awaitingCommit; awaitingCommit=null;
+      if (data.error) pending.reject(new Error(data.error)); else pending.resolve();
+    }
+  };
+  function commitNote(item,patch) {
+    if (!detachedId) { changeRecord(item.id,patch,false,item); return; }
+    return new Promise((resolve,reject)=>{
+      const id=crypto.randomUUID();
+      awaitingCommit={id,resolve,reject};
+      noteChannel.postMessage({kind:"save",request:id,original:item,patch});
+    });
   }
 
   days.addEventListener("contextmenu", event => openTaskMenu(event, !event.clientX && !event.clientY));
@@ -1125,7 +1207,7 @@
   noteTitle.addEventListener("input", () => noteTitle.setCustomValidity(""));
   noteForm.addEventListener("submit", async event => {
     event.preventDefault();
-    if (!noteRow?.isConnected || !draft || draft.saving) return;
+    if (!draft || draft.saving) return;
     const title = noteTitle.value.trim();
     if (!title) {
       noteTitle.setCustomValidity(t("titleRequired"));
@@ -1154,16 +1236,15 @@
         }
         // Publish metadata only after all original blobs have committed.
         if (additions.length) await writePhotos(additions, []);
-        changeRecord(item.id, patch, false, item);
+        await commitNote(item,patch);
         const retained = new Set(images.map(ref => ref.id));
         const removed = photoRefs(item).filter(ref => !retained.has(ref.id)).map(ref => ref.id);
-        void discardUnreferenced(removed);
+        await discardUnreferenced(removed);
       }
-      const area = noteRow.querySelector(".task");
-      projects.tagRow(noteRow,assigned);
-      area.value = records.find(record => record.id === item.id)?.text || title;
-      fit(area);
-      noteRow.querySelector(".check").setAttribute("aria-label", t("check") + " " + area.value);
+      if (!detachedId) {
+        const latest=records.find(record=>record.id===item.id);
+        if (latest) syncNoteRow(latest,patch);
+      }
       draft.saving = false;
       closeNote();
     } catch (error) {
@@ -1177,11 +1258,24 @@
   document.getElementById("note-cancel").addEventListener("click", closeNote);
   note.addEventListener("cancel", event => { event.preventDefault(); closeNote(); });
   note.addEventListener("keydown", event => {
+    if (event.key==="Escape" && !event.isComposing && !photoPreview.open) {
+      event.preventDefault(); requestNoteClose(); return;
+    }
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       noteForm.requestSubmit();
     }
   });
+  function requestNoteClose() {
+    if (!draft) { closeNote(); return; }
+    if (!draft.saving) {
+      const item=draft.original, value=rich.read(draft.photos);
+      const dirty=noteTitle.value!==item.text || document.getElementById("note-project").value!==(item.projectId||"") ||
+        !sameNote(item,{note:value.text,noteImages:value.images,noteStyles:value.styles});
+      if (!dirty || window.confirm(t("discardDraft"))) { closeNote(); return; }
+    }
+    if (detachedId) host.postMessage("note-keep");
+  }
 
   // A native transparent WebView has no wallpaper pixels to refract. Its static rim
   // is drawn once; browser previews can refract their own wallpaper.
@@ -1276,7 +1370,7 @@
   window.addEventListener("resize", () => closeTaskMenu());
   new ResizeObserver(queueLayout).observe(panel);
   window.addEventListener("resize", queueLayout);
-  if (isDesktop) {
+  if (isDesktop && !detachedId) {
     const pin = document.getElementById("pin-window");
     host.addEventListener("message", event => {
       if (event.data === "pinned" || event.data === "floating") pin.checked = event.data === "pinned";
@@ -1350,7 +1444,29 @@
     if (row) openNote(row);
   }
   projects.mount(()=>exportRecords(),openProjectNote);
-  if (isDesktop) host.addEventListener("message",e=>{if(typeof e.data==="string" && e.data.startsWith("open-note|"))openProjectNote(e.data.slice(10));});
+  if (isDesktop) host.addEventListener("message",e=>{
+    if (detachedId && e.data==="request-close") requestNoteClose();
+    if (!detachedId && typeof e.data==="string" && e.data.startsWith("open-note|")) openProjectNote(e.data.slice(10));
+  });
   applySizes();
   displayLanguage();
+  if (detachedId) {
+    const item=records.find(record=>record.id===detachedId);
+    if (item) { showNote(item); host.postMessage("note-ready"); }
+    else host.postMessage("note-close");
+    window.addEventListener("storage",event=>{
+      if (event.key===sizeKey) {
+        try {
+          const saved=JSON.parse(event.newValue||"{}"), value=saved.noteFont??saved.font;
+          document.documentElement.style.setProperty("--task-size",Number.isFinite(value) && value>=11 && value<=32 ? value+"px" : "");
+        } catch {}
+      }
+      if (event.key===languageKey || event.key==="desktop-calendar.projects.v1") {
+        if (event.key===languageKey) { locale=event.newValue==="en-US" ? "en-US" : "zh-CN"; displayLanguage(); }
+        const select=document.getElementById("note-project");
+        projects.selectOptions(select,select.value);
+        if (draft) displayNoteDate(draft.original.date);
+      }
+    });
+  }
 })();

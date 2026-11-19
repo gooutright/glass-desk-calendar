@@ -26,7 +26,14 @@ def measure(page, session, kind):
         if(kind==='hover') {
           panel.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,clientX:(i*47)%width,clientY:(i*17)%height}));
         } else if(kind==='resize') {
-          chrome.webview.postMessage('width='+(1050+(i%30)*4));
+          const wanted=1050+(i%30)*4;
+          chrome.webview.postMessage('width='+wanted);
+          // Count a resize only after the new native viewport reached the renderer.
+          const deadline=performance.now()+3000;
+          while (Math.abs(innerWidth-wanted)>1) {
+            if (performance.now()>deadline) throw new Error('Native resize was not applied');
+            await new Promise(requestAnimationFrame);
+          }
         } else {
           area.value='Typing sample '+i;
           area.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText'}));
