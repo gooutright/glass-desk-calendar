@@ -4,6 +4,8 @@
 
 当月日期各自保留圆角和间距，月初、月末露出的相邻月份日期连成一条浅色带。每一天都可以独立点写。日期数字固定为深蓝色，今天用圆框标记。
 
+[查看各版本的修改记录](CHANGELOG.md)
+
 ## 下载和打开
 
 在 [Releases](https://github.com/gooutright/glass-desk-calendar/releases/latest) 下载 Windows x64 版本。
