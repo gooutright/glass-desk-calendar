@@ -138,23 +138,35 @@
       panel=make("section","dock-panel"); panel.id="project-panel";
       aside.append(panel,tabs);
     }
-    aside.setAttribute("aria-label",ui("项目便签","Project notes"));
+    aside.setAttribute("aria-label",ui("项目文件夹","Project folders"));
     const focused=document.activeElement?.dataset, tabFocus=focused?.projectTab, rowFocus=focused?.openNote;
+    const tabScroll=tabs.scrollTop;
     tabs.replaceChildren(...all.map(p=>{
-      const b=button("dock-tab");b.dataset.projectTab=p.id;b.title=p.name;b.setAttribute("aria-label",p.name);
-      b.setAttribute("aria-expanded",String(openGroup===p.id));b.setAttribute("aria-controls","project-panel");paint(b,p);b.append(make("i","paper-icon"));
-      b.onclick=()=>{openGroup=openGroup===p.id?null:p.id;dock();};return b;
+      const tab=button("dock-tab");
+      tab.dataset.projectTab=p.id;
+      tab.title=p.name;
+      tab.setAttribute("aria-label",p.name);
+      tab.setAttribute("aria-expanded",String(openGroup===p.id));
+      tab.setAttribute("aria-controls","project-panel");
+      paint(tab,p);
+      const icon=make("i","folder-symbol");
+      icon.setAttribute("aria-hidden","true");
+      tab.append(icon,make("span","folder-name",p.name));
+      tab.onclick=()=>{openGroup=openGroup===p.id ? null : p.id;dock();};
+      return tab;
     }));
+    tabs.scrollTop=tabScroll;
     panel.hidden=openGroup===null;
-    let count=0;
     if(!panel.hidden) {
       const p=find(openGroup);
       const entries=records.filter(r=>(ids.has(r.projectId)?r.projectId:"")===p.id).sort((a,b)=>a.date.localeCompare(b.date));
-      count=entries.length;paint(panel,p);
+      const count=entries.length;paint(panel,p);
       const top=make("header");top.append(make("i","project-dot"),make("strong","",p.name+" · "+count));
       const close=button("dock-close","×");close.setAttribute("aria-label",ui("收起便签","Collapse notes"));
       close.onclick=()=>{const previous=openGroup;openGroup=null;dock();[...tabs.children].find(t=>t.dataset.projectTab===previous)?.focus();};top.append(close);
-      const list=make("div","project-items");const scroll=panel.querySelector(".project-items")?.scrollTop||0;
+      const list=make("div","project-items");
+      const scroll=panel.dataset.project===p.id ? (panel.querySelector(".project-items")?.scrollTop || 0) : 0;
+      panel.dataset.project=p.id;
       for(const item of entries) {
         const b=button("dock-item");b.dataset.openNote=item.id;b.dataset.done=String(!!item.done);
         const d=make("time","",item.date);d.dateTime=item.date;
@@ -166,11 +178,16 @@
     }
     if(rowFocus) [...panel.querySelectorAll(".dock-item")].find(b=>b.dataset.openNote===rowFocus)?.focus({preventScroll:true});
     else if(tabFocus!==undefined) [...tabs.children].find(b=>b.dataset.projectTab===tabFocus)?.focus({preventScroll:true});
-    if(nativeDock) {
-      const height=Math.min(screen.availHeight-12,Math.max(42,Math.min(all.length*35+8,504),openGroup===null ? 0 : Math.min(520,77+count*54)));
-      const size="dock-size|"+(openGroup===null?34:330)+"|"+height;
-      if(size!==dockSize) {dockSize=size;host.postMessage(size);}
-    }
+    if(nativeDock) sizeDesktopDock();
+  }
+  function sizeDesktopDock() {
+    const aside=get("project-dock");
+    if(!aside.firstElementChild) return;
+    // Measure the folder labels at their natural size, independent of the current native window.
+    aside.style.setProperty("--dock-limit",Math.max(32,Math.min(600,screen.availHeight-12))+"px");
+    const bounds=aside.getBoundingClientRect();
+    const size="dock-size|"+Math.ceil(bounds.width)+"|"+Math.ceil(bounds.height);
+    if(size!==dockSize) {dockSize=size;host.postMessage(size);}
   }
   function schedule() { if(!frame) frame=requestAnimationFrame(()=>{frame=0;dock();}); }
   function syncDockFont() {
@@ -180,18 +197,30 @@
       Number.isFinite(size) && size>=11 && size<=32 ? size+"px" : "");
   }
   window.addEventListener("storage",event=>{
-    if(nativeDock && (event.key===sizeKey || event.key===null)) syncDockFont();
+    if(nativeDock && (event.key===sizeKey || event.key===null)) {syncDockFont();sizeDesktopDock();}
     if(![key,recordsKey,selectedKey,languageKey,null].includes(event.key)) return;
     if(nativeDock) document.documentElement.lang=lang();
     else if(event.key!==recordsKey){toolbar();updateDots();}
     schedule();
   });
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&openGroup!==null){openGroup=null;dock();}});
+  document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"&&openGroup!==null){
+      const previous=openGroup;openGroup=null;dock();
+      [...get("project-tabs").children].find(tab=>tab.dataset.projectTab===previous)?.focus();
+    }
+    const tab=e.target.closest(".dock-tab");
+    if(!tab || !["ArrowUp","ArrowDown","Home","End"].includes(e.key)) return;
+    e.preventDefault();
+    const row=tab.parentElement;
+    const next={ArrowUp:tab.previousElementSibling,ArrowDown:tab.nextElementSibling,Home:row.firstElementChild,End:row.lastElementChild};
+    next[e.key]?.focus();
+  });
   window.CalendarProjects=Object.freeze({find,active,tagRow,selectOptions,refresh:schedule,langChanged(){toolbar();schedule();},
     mount(records,open){listRecords=records;openNote=open;bindToolbar();dock();}});
   if(nativeDock) {
     syncDockFont();
     document.documentElement.lang=lang();dock();
+    window.addEventListener("resize",sizeDesktopDock);
     host?.addEventListener("message",e=>{if(e.data==="collapse"){openGroup=null;dock();}});
   }
 })();

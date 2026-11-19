@@ -26,19 +26,36 @@
 .dock-page, .dock-page body { margin: 0; background: transparent; overflow: hidden; }
 .dock-page * { box-sizing: border-box; }
 .dock-page body::before { display: none; }
-#project-dock { position: fixed; z-index: 7; inset: 50% 0 auto auto; transform: translateY(-50%); display: flex; align-items: center; gap: 3px; max-width: 100vw; color: #1e3748; font: 13px/1.35 "Segoe UI Variable Text","Microsoft YaHei UI",sans-serif; }
+#project-dock { --folder-width: 34px; --dock-limit: min(76dvh,600px); position: fixed; z-index: 7; inset: 50% 0 auto auto; transform: translateY(-50%); display: flex; align-items: center; max-width: 100vw; color: #1e3748; font: 13px/1.35 "Segoe UI Variable Text","Microsoft YaHei UI",sans-serif; }
 .native #project-dock { display: none; }
 #project-dock [hidden] { display: none !important; }
-#project-tabs { display: flex; flex-direction: column; gap: 4px; max-height: min(72vh,540px); overflow: auto; scrollbar-width: thin; padding: 3px 0 3px 3px; }
-.dock-page #project-tabs { max-height: 100dvh; }
+.dock-page #project-dock { width: max-content; max-width: none; }
+#project-tabs { display: flex; flex: 0 0 var(--folder-width); width: var(--folder-width); flex-direction: column; gap: 3px; padding: 2px 0; max-height: var(--dock-limit); overflow: hidden auto; scrollbar-width: none; overscroll-behavior: contain; }
 #project-dock button { font: inherit; cursor: pointer; border: none; }
-.dock-tab { flex: none; height: 31px; width: 30px; padding: 5px; display: grid; place-items: center; border-radius: 9px 0 0 9px; background: color-mix(in srgb,var(--project-color) 22%,#f2f7f8); box-shadow: inset 0 0 0 1px rgb(48 76 92 / .19); }
-.dock-tab[aria-expanded=true] { outline: 1.5px solid var(--project-color); outline-offset: -2px; }
-.paper-icon { width: 15px; height: 18px; border-radius: 2px; position: relative; background: var(--project-color); clip-path: polygon(0 0,66% 0,100% 29%,100% 100%,0 100%); }
-.paper-icon::before { content:""; position:absolute; right:0; top:0; width:5px; height:5px; background:rgb(255 255 255 / .62); }
-.paper-icon::after { content:""; position:absolute; left:3px; top:8px; width:8px; height:1px; background: var(--project-mark,white); box-shadow:0 3px var(--project-mark,white); opacity:.8; }
-.dock-panel { width:min(286px,calc(100vw - 44px)); padding:12px; max-height:min(72vh,540px); display:flex; flex-direction:column; }
-.dock-page .dock-panel { max-height:calc(100dvh - 4px); }
+.dock-tab {
+  --folder-edge: color-mix(in srgb,var(--project-color) 65%,#5b6a73);
+  --folder-fill: color-mix(in srgb,var(--project-color) 17%,#f5f8fa);
+  --folder-outline: polygon(100% 0,100% 100%,11px 100%,8px calc(100% - 1px),6px calc(100% - 4px),6px 29px,5px 26px,1px 22px,0 19px,0 6px,1px 3px,4px 1px,7px 0);
+  box-sizing: border-box; position: relative; isolation: isolate; display: flex; flex: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; min-height: 65px; padding: 8px 3px 10px 7px;
+  color: #203542; background: transparent;
+}
+.dock-tab::before,.dock-tab::after { content: ""; position: absolute; clip-path: var(--folder-outline); pointer-events: none; }
+.dock-tab::before { z-index: -2; inset: 0; background: var(--folder-edge); }
+.dock-tab::after { z-index: -1; inset: 1px 2px 1px 1px; background: linear-gradient(95deg,color-mix(in srgb,var(--project-color) 35%,white),var(--folder-fill) 37%); }
+.dock-tab:hover,.dock-tab[aria-expanded=true] { --folder-fill: color-mix(in srgb,var(--project-color) 34%,#f7fafb); }
+.dock-tab[aria-expanded=true]::after { right: 4px; }
+.dock-tab:focus-visible { outline: none; }
+.dock-tab:focus-visible::before { background: #183c54; }
+.dock-tab:focus-visible::after { inset: 2px 3px 2px 2px; }
+.folder-symbol { display: block; position: relative; flex: none; width: 14px; height: 11px; }
+.folder-symbol::before,.folder-symbol::after { content: ""; position: absolute; inset: 0; border-radius: 2px; }
+.folder-symbol::before { background: var(--folder-edge); clip-path: polygon(0 0,43% 0,55% 23%,100% 23%,100% 100%,0 100%); }
+.folder-symbol::after { top: 36%; background: linear-gradient(color-mix(in srgb,var(--project-color) 62%,white),var(--project-color)); box-shadow: inset 0 1px 0 rgb(255 255 255 / .55); }
+.folder-name { writing-mode: vertical-rl; text-orientation: mixed; max-inline-size: 82px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 1.1; font-weight: 600; letter-spacing: .04em; }
+.dock-panel { width:min(288px,calc(100vw - var(--folder-width))); padding:12px; max-height:var(--dock-limit); display:flex; flex-direction:column; border-radius:13px 4px 4px 13px; border-inline-end:3px solid color-mix(in srgb,var(--project-color) 58%,#dce7eb); }
+.dock-page .dock-panel { width:288px; }
 .dock-panel header { font-size:14px; padding-bottom:7px; border-bottom:1px solid #c4d3da; }
 .dock-panel header strong { overflow-wrap:anywhere; }
 .dock-panel header button { margin-left:auto; color:#284253; background:transparent; padding:2px 6px; }
@@ -49,6 +66,11 @@
 .dock-item span { font-size:var(--task-size,13px); overflow-wrap:anywhere; white-space:pre-wrap; }
 .dock-item[data-done=true] span { text-decoration:line-through; }
 .dock-empty { margin:9px 0 2px; }
+@media (forced-colors:active) {
+  .dock-tab::before,.folder-symbol::before { background:ButtonText; }
+  .dock-tab::after { background:ButtonFace; }
+  .dock-tab[aria-expanded=true]::before,.dock-tab:focus-visible::before { background:Highlight; }
+}
 @container calendar (max-width: 585px) {
   .project-control { margin:0; } #project-toggle { max-width:96px; min-height:25px; padding:2px 6px; }
 }

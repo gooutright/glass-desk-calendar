@@ -51,11 +51,29 @@ def run():
               CalendarActions.add('2026-10-01','Agenda',b),
               CalendarActions.add('2026-10-02','Old unassigned note','')]""",[a,b])
             tab=dock.locator(".dock-tab[aria-label=Research]")
+            tab.wait_for()
+            assert tab.inner_text()=="Research", "A folded folder must show its project name"
+            assert tab.evaluate("""b=>{
+                const name=b.querySelector('.folder-name'), bounds=b.getBoundingClientRect();
+                return name && getComputedStyle(name).writingMode==='vertical-rl' &&
+                  bounds.height>bounds.width*1.5 && Math.abs(bounds.right-innerWidth)<2;
+            }"""), "Project names should form tall, flush-right folder tabs"
             tab.click()
             dock.wait_for_function("document.querySelectorAll('.dock-item').length===2")
             assert dock.locator(".dock-item time").all_text_contents()==["2026-10-01","2027-01-01"]
             wide=wait_for(lambda:rect(hwnd) if rect(hwnd).right-rect(hwnd).left>200 else None)
             assert abs(wide.right-base.right)<=2
+            assert tab.evaluate("""b=>{
+                const panel=document.getElementById('project-panel').getBoundingClientRect();
+                return b.getAttribute('aria-expanded')==='true' && panel.width>160 &&
+                  panel.right<=b.getBoundingClientRect().left+2;
+            }"""), "The folder must open to the left of the same tab"
+            other=dock.get_by_role("button",name="Meetings",exact=True)
+            other.click()
+            assert dock.locator(".dock-item span").all_text_contents()==["Agenda"]
+            other.click()
+            assert dock.locator("#project-panel").is_hidden()
+            tab.click()
             dock.locator(".dock-item").first.click()
             main.locator("#task-note[open]").wait_for()
             assert main.locator("#note-title").input_value()=="Report"
@@ -89,6 +107,29 @@ def run():
             assert page.evaluate("CalendarProjects.active()")==b
             assert page.evaluate("CalendarActions.list().filter(e=>e.projectId).length")==3
             print("PASS projects and assignments survive a full restart; unassigned notes are retained.")
+            # A preexisting, long project list should fit the desktop and remain reachable by keyboard.
+            page.evaluate("""()=>{
+              const key='desktop-calendar.projects.v1', projects=JSON.parse(localStorage.getItem(key));
+              for(let i=0;i<12;i++) projects.push({id:'extra-'+i,name:'Design 项目归档资料 '+i,color:'#'+(0x708090+i).toString(16)});
+              localStorage.setItem(key,JSON.stringify(projects));
+            }""")
+            dock=wait_for(lambda:next((p for p in page.context.pages if p.url.endswith('/dock.html')),None))
+            last=dock.get_by_role("button",name="Design 项目归档资料 11",exact=True)
+            last.wait_for(state="attached")
+            dock.locator("#project-tabs").hover()
+            dock.mouse.wheel(0,380)
+            dock.wait_for_function("document.getElementById('project-tabs').scrollTop>0")
+            first=dock.locator(".dock-tab").first
+            first.focus()
+            first.press("End")
+            assert last.evaluate("""b=>document.activeElement===b && b.parentElement.scrollTop>0 &&
+              b.querySelector('.folder-name').scrollHeight>b.querySelector('.folder-name').clientHeight &&
+              b.getBoundingClientRect().bottom<=innerHeight+1""")
+            last.press("Enter")
+            assert dock.locator("#project-panel").is_visible()
+            last.press("Escape")
+            assert dock.locator("#project-panel").is_hidden() and last.evaluate("b=>document.activeElement===b")
+            print("PASS vertical folder labels, project switching, long names, scrolling and keyboard collapse.")
         finally:
             quit_app(process,page)
 
