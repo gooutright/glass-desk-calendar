@@ -65,9 +65,13 @@ namespace GlassDeskCalendar
         public void Place(Rectangle rect) { Position(Fit(rect),false); }
         void Position(Rectangle rect, bool top)
         {
+            Rectangle current = Bounds;
+            if (!top && current==rect) return;
             Point point = rect.Location;
             if (Pinned) ScreenToClient(GetParent(window),ref point);
-            SetWindowPos(window, IntPtr.Zero, point.X, point.Y, rect.Width, rect.Height, NoActivate | (top ? FrameChanged : NoZOrder));
+            uint flags=NoActivate | (top ? FrameChanged : NoZOrder);
+            if (current.Size==rect.Size) flags|=1; // SWP_NOSIZE: moving does not resize the WebView.
+            SetWindowPos(window, IntPtr.Zero, point.X, point.Y, rect.Width, rect.Height, flags);
         }
         static IntPtr DesktopHost()
         {

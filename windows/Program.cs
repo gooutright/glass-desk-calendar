@@ -53,6 +53,7 @@ namespace GlassDeskCalendar
         readonly Forms.NotifyIcon tray;
         readonly Forms.ToolStripMenuItem showMenu, pinMenu, exitMenu;
         DesktopPlacement position;
+        readonly System.Windows.Threading.DispatcherTimer geometryDelay = new System.Windows.Threading.DispatcherTimer();
         RecordExport exporter;
         ProjectDockWindow dock;
         bool english, closing;
@@ -69,6 +70,8 @@ namespace GlassDeskCalendar
             Width=840; Height=580; WindowStartupLocation=WindowStartupLocation.Manual;
             view = new WebView2CompositionControl { DefaultBackgroundColor=System.Drawing.Color.Transparent, AllowExternalDrop=true };
             Content = view;
+            geometryDelay.Interval=TimeSpan.FromMilliseconds(280);
+            geometryDelay.Tick+=delegate { geometryDelay.Stop(); SaveState(); };
             var menu = new Forms.ContextMenuStrip();
             showMenu = new Forms.ToolStripMenuItem("",null,delegate { ShowAsWindow(); });
             pinMenu = new Forms.ToolStripMenuItem("",null,delegate { SetPinned(!position.Pinned); });
@@ -78,12 +81,13 @@ namespace GlassDeskCalendar
             TrayText(); tray.Visible=true;
             tray.DoubleClick += delegate { ShowAsWindow(); };
             SourceInitialized += delegate {
-                position = new DesktopPlacement(new WindowInteropHelper(this).Handle,SaveState);
+                position = new DesktopPlacement(new WindowInteropHelper(this).Handle,ScheduleGeometrySave);
                 position.Place(previousBounds ?? position.DefaultBounds());
             };
             Loaded += OpenPage;
             Closing += delegate {
                 closing=true;
+                geometryDelay.Stop();
                 if (position!=null) { position.Stop(); SaveState(); }
                 if (dock!=null) { dock.End(); dock=null; }
             };
@@ -101,6 +105,11 @@ namespace GlassDeskCalendar
                     Math.Abs((long)x)<100000 && Math.Abs((long)y)<100000 && w<100000 && h<100000) previousBounds=new Rectangle(x,y,w,h);
                 wantedPin=v[4]=="1";
             } catch (IOException) { }
+        }
+        void ScheduleGeometrySave()
+        {
+            geometryDelay.Stop();
+            geometryDelay.Start();
         }
         void SaveState()
         {

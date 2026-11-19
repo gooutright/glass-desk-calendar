@@ -11,6 +11,9 @@ html.native, .native body { background: transparent; overflow: hidden; }
   text-shadow: 0 0 3px rgb(var(--popup) / .98), 0 0 7px rgb(var(--popup) / .85);
 }
 .native .current .day-number { text-shadow: none; }
+.native :is(.refracted-edge,.month-nav,.opacity-control,#settings-toggle,.size-menu,.task-menu,.note) {
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
 .native :is(.heading,.weekdays) { text-shadow: 0 0 5px rgb(var(--popup) / .95); }
 .native .heading { cursor: move; user-select: none; }
 .native .resize-handle { display: none; }

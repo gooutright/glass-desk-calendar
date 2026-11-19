@@ -229,7 +229,9 @@
     }
   }
 
+  const autoHeight = CSS.supports("field-sizing", "content");
   function fit(area) {
+    if (autoHeight) return;
     area.style.height = "0";
     area.style.height = area.scrollHeight + "px";
   }
@@ -266,8 +268,9 @@
     if (layoutFrame) return;
     layoutFrame = requestAnimationFrame(() => {
       layoutFrame = 0;
-        if (note.open) positionNote();
+      if (note.open) positionNote();
       if (!sizeMenu.hidden) syncSizeControls();
+      if (autoHeight) return;
       const editors = [...days.querySelectorAll(".task")];
       editors.forEach(area => { area.style.height = "0"; });
       const heights = editors.map(area => area.scrollHeight);
@@ -1180,9 +1183,11 @@
     }
   });
 
+  // A native transparent WebView has no wallpaper pixels to refract. Its static rim
+  // is drawn once; browser previews can refract their own wallpaper.
   const followPointer = matchMedia("(pointer: fine) and (prefers-reduced-motion: no-preference)");
   let glintFrame = 0;
-  panel.addEventListener("pointermove", event => {
+  if (!isDesktop) panel.addEventListener("pointermove", event => {
     if (!followPointer.matches || glintFrame || drag) return;
     glintFrame = requestAnimationFrame(() => {
       glintFrame = 0;
@@ -1198,10 +1203,11 @@
     for (const {target} of entries) updateLens(target);
   });
   const lensByElement = new Map();
-  for (const [selector, bevel, bend] of [
+  const lenses = [
     [".refracted-edge", 19, 57], [".month-nav", 9, 24], [".opacity-control", 9, 24],
     ["#settings-toggle", 9, 21], ["#task-menu", 10, 25], ["#task-note", 13, 32], ["#settings-menu", 12, 29]
-  ]) {
+  ];
+  for (const [selector, bevel, bend] of isDesktop ? [] : lenses) {
     const element = document.querySelector(selector);
     const id = "lens-" + lensByElement.size;
     const filter = document.createElementNS(svgNS, "filter");
