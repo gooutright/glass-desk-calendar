@@ -36,11 +36,14 @@ if ($LASTEXITCODE -ne 0) { throw "C# compilation failed ($LASTEXITCODE)" }
 foreach ($name in 'Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wpf.dll') { Copy-Item -LiteralPath (Join-Path $sdk "lib/net462/$name") -Destination $app -Force }
 Copy-Item -LiteralPath (Join-Path $sdk 'runtimes/win-x64/native/WebView2Loader.dll'),(Join-Path $root 'windows/GlassDeskCalendar.exe.config') -Destination $app -Force
 foreach ($name in 'LICENSE','NOTICE') { Copy-Item -LiteralPath (Join-Path $sdk "$name.txt") -Destination (Join-Path $app "WebView2-$name.txt") -Force }
-foreach ($name in 'index.html','calendar.css','desktop.css','calendar.js','projects.css','projects.js','dock.html') { Copy-Item -LiteralPath (Join-Path $root "web/$name") -Destination (Join-Path $app 'web') -Force }
+[void][IO.Directory]::CreateDirectory((Join-Path $app 'web/vendor'))
+foreach ($name in 'index.html','calendar.css','desktop.css','calendar.js','projects.css','projects.js','dock.html','note-format.css','rich-note.js','vendor/quill.js','vendor/quill.core.css','vendor/Quill-LICENSE.txt','vendor/quill.js.LICENSE.txt') {
+    Copy-Item -LiteralPath (Join-Path $root "web/$name") -Destination (Join-Path $app "web/$name") -Force
+}
 if ($AppOnly) { Write-Output (Join-Path $app 'GlassDeskCalendar.exe'); return }
 
 $wix = Expand-Tool 'wix314' 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip' '6AC824E1642D6F7277D0ED7EA09411A508F6116BA6FAE0AA5F2C7DAA2FF43D31' 'candle.exe'
-$name = 'GlassDeskCalendar-1.1.0-win-x64'
+$name = 'GlassDeskCalendar-1.2.0-win-x64'
 $object = Join-Path $build 'installer.wixobj'
 & (Join-Path $wix 'candle.exe') -nologo -arch x64 "-dAppDir=$app" "-dIcon=$icon" -out $object (Join-Path $root 'packaging/installer.wxs')
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }

@@ -1,0 +1,30 @@
+/* Keep the date scale and the note scale independent, including in the year view. */
+:root { --task-size: clamp(13px, .94vw, 17px); }
+.calendar { --calendar-size: calc(clamp(13px, .94vw, 17px) + 1px); --date-height: max(23px, calc(var(--calendar-size) + 7px)); }
+.day-number { font-size: var(--calendar-size); }
+.weekdays { font-size: max(9px, calc(var(--calendar-size) * .79)); }
+.day-heading :is(.month-mark,.holiday-mark) { font-size: max(9px, calc(var(--calendar-size) * .71)); }
+#month-label { font-size: var(--calendar-title-size, clamp(25px, 2.3vw, 39px)); }
+.mini-title { font-size: var(--calendar-size); }
+.mini-week { font-size: max(9px, calc(var(--calendar-size) * .64)); }
+.mini-date { font-size: max(10px, calc(var(--calendar-size) * .80)); }
+.size-menu { max-height: calc(100dvh - 75px); overflow-y: auto; }
+
+.note-document.ql-container { height: auto; font-family: inherit; font-size: var(--task-size); overflow: hidden; }
+#note-body { flex: 1; min-height: 0; padding: 3px 1px; line-height: 1.55; font-size: var(--task-size); overflow-y: auto; overflow-wrap: anywhere; scrollbar-width: thin; caret-color: var(--accent); }
+#note-body.ql-blank::before { left: 1px; right: 1px; color: var(--muted); font-style: normal; }
+#note-body .note-photo { display: block; width: fit-content; max-width: 100%; margin: 4px 0; }
+#note-body .note-photo img { max-width: 100%; }
+#note-format { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 3px; }
+#note-format :is(button,select) { min-height: 26px; font-size: 12px; border-radius: 7px; }
+#note-format button { min-width: 26px; padding: 2px 4px; }
+#note-format button:hover, #note-format button[aria-pressed=true] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#format-size { max-width: 82px; padding: 1px 2px; color: inherit; background: rgb(var(--control) / .5); border: 1px solid var(--line); }
+.format-pair { display: inline-flex; align-items: center; gap: 1px; padding-inline-start: 4px; border-left: 1px solid var(--line); }
+.format-pair input[type=color] { width: 17px; height: 19px; padding: 0; border: none; background: transparent; cursor: pointer; }
+.format-pair input::-webkit-color-swatch-wrapper { padding: 4px 1px; }
+.format-pair input::-webkit-color-swatch { border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); border-radius: 4px; }
+#apply-color span { border-bottom: 3px solid var(--swatch); font-weight: 650; }
+#apply-highlight span { padding: 0 2px; border-radius: 2px; color: #16202b; background: var(--swatch); }
+.note-actions { margin: 0; }
+@container calendar (max-width: 585px) { #month-label { font-size: var(--calendar-title-size, 25px); } }

@@ -8,8 +8,8 @@
 
 在 [Releases](https://github.com/gooutright/glass-desk-calendar/releases/latest) 下载 Windows x64 版本。
 
-- **安装版**　双击 `GlassDeskCalendar-1.1.0-win-x64.msi`。安装完成后，双击桌面的「桌面月历」，也可以从开始菜单打开 Glass Desk Calendar。
-- **便携版**　解压 `GlassDeskCalendar-1.1.0-win-x64-portable.zip`，双击其中的 `GlassDeskCalendar.exe`。程序和同一文件夹里的组件需要放在一起。
+- **安装版**　双击 `GlassDeskCalendar-1.2.0-win-x64.msi`。安装完成后，双击桌面的「桌面月历」，也可以从开始菜单打开 Glass Desk Calendar。
+- **便携版**　解压 `GlassDeskCalendar-1.2.0-win-x64-portable.zip`，双击其中的 `GlassDeskCalendar.exe`。程序和同一文件夹里的组件需要放在一起。
 
 适用于 Windows 10 22H2 和 Windows 11 的 x64 系统。程序使用 .NET Framework 4.8 和 Microsoft Edge WebView2 Runtime。在 Windows 11 上使用系统已有的运行组件。在缺少 WebView2 的电脑上，请安装微软的 [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
 
@@ -18,12 +18,13 @@
 - **记一条待办**　点击日期格开始输入，回车继续写下一条。点击复选框标记完成。
 - **按项目记便签**　在「年览」旁边点「便签项目」，选颜色、填名称并创建项目。之后写的便签带有这个项目的彩色圆点，点圆点可以勾选完成。旧便签可以在「编辑」里选择项目。
 - **查看同项目的所有便签**　点击桌面右边缘的彩色便签图案，面板按日期列出该项目跨月、跨年的记录。点一条即可跳到对应日期并打开原笔记。点同一图案或 × 收起。
-- **写详细笔记**　右键待办，选择「编辑」。在光标处按 Ctrl+V 粘贴截图，也可以点「插入图片」或拖入照片。图前图后都能写字。点击缩略图可查看原图，编辑结束点「保存」。
-- **调整桌面布局**　拖动月份标题移动月历，拖动窗口边缘或四角调整大小。设置里也可以调宽度、高度、字号和行距。右上角滑块控制玻璃面板的透明度。
+- **写详细笔记**　右键待办，选择「编辑」，在约三格宽、三格高的笔记窗口中写字。在光标处按 Ctrl+V 粘贴截图，也可以点「插入图片」或拖入照片。图前图后都能写字。点击缩略图可查看原图。
+- **标出重点**　选中文字，在正文下方调整字号、加粗、加下划线、改文字颜色或画荧光笔。没有选中文字时，格式用于接下来输入的字。点色块可以换颜色，再点同色的荧光笔按钮可以擦除底色。编辑结束点「保存」。
+- **调整桌面布局**　拖动月份标题移动月历，拖动窗口边缘或四角调整大小。设置里的「日历字号」调年月、星期和日期，「便签字号」调清单、项目便签和笔记默认正文。还可以调宽度、高度和行距。右上角滑块控制玻璃面板的透明度。
 - **切换窗口模式**　在设置中切换「固定在桌面」。固定时可按 Win+D 查看。双击系统托盘中的月历图标或再次启动应用，可以把月历显示为普通窗口。托盘菜单可以退出。
 - **切换月份和语言**　用左右箭头翻月，「今天」回到当前月份。「年览」可从全年跳到某一天。中文显示已收录的中国大陆放假、调休上班安排，英文显示美国联邦假日和补休日。周末和相邻月份有独立标记。
 - **读节日标记**　节名紧跟日期数字，使用浅绿色标签。调休上班有「班」标记。周六和周日由表头标识。
-- **导出**　在设置中选「导出记录」保存 CSV。笔记包含图片时还可以选「导出含图片的 HTML」，把文字和原图一起保存为可离线打开的文件。
+- **导出**　在设置中选「导出记录」保存 CSV。选「导出图文与格式 HTML」可以把标注、文字和原图一起保存，离线也能打开。
 
 ## 本地数据
 
@@ -45,6 +46,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
 python -m pip install playwright
 python tests/desktop_smoke.py
 python tests/project_notes_smoke.py
+python tests/note_format_smoke.py
 ```
 
 页面为后续本地扩展预留了 `window.CalendarActions`，支持 `list()`、`add(date, title, projectId?)`、`update(id, {text, done, projectId})` 和 `remove(id)`。本版使用本地调用，未接入 AI 服务。
+
+笔记编辑使用随应用分发的 Quill 2.0.3，断网也能编辑。[Quill 许可](web/vendor/Quill-LICENSE.txt)

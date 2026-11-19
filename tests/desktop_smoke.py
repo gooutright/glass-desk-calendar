@@ -169,7 +169,7 @@ def run():
             page.locator("#note-body").fill("before")
             page.locator("#note-body").press("End")
             page.locator("#note-files").set_input_files({"name":"proof.png","mimeType":"image/png","buffer":png})
-            page.locator(".note-text").last.fill("after")
+            page.keyboard.insert_text("after")
             page.locator("#note-form [type=submit]").click()
             page.locator("#task-note").wait_for(state="hidden")
             page.locator("#settings-toggle").click()
@@ -198,7 +198,8 @@ def run():
             task.click(button="right")
             page.locator('[data-action="edit"]').click()
             page.wait_for_function("document.querySelector('#note-document img')?.naturalWidth===1")
-            assert page.locator(".note-text").evaluate_all("(n)=>n.map(e=>e.value)")==["before","after"]
+            content=page.evaluate("CalendarActions.list().find(e=>e.text==='Windows desktop smoke test')")
+            assert content["note"]=="beforeafter" and content["noteImages"][0]["at"]==6
             page.locator("#note-form [type=submit]").click()
             page.locator("#task-note").wait_for(state="hidden")
             print("PASS full restart preserved window, language, task, image, inline text and transparency.")

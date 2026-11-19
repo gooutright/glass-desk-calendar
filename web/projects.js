@@ -4,6 +4,7 @@
   const selectedKey = "desktop-calendar.active-project.v1";
   const recordsKey = "desktop-calendar-sketch.records.v1";
   const languageKey = "desktop-calendar-sketch.language.v1";
+  const sizeKey = "desktop-calendar-sketch.size.v1";
   const palette = ["#4a799a","#368575","#bd8050","#b56677","#8174a6"];
   const nativeDock = document.documentElement.classList.contains("dock-page");
   const useNative = location.hostname === "calendar.example" && !!window.chrome?.webview;
@@ -172,7 +173,14 @@
     }
   }
   function schedule() { if(!frame) frame=requestAnimationFrame(()=>{frame=0;dock();}); }
+  function syncDockFont() {
+    let size;
+    try { const saved=JSON.parse(stored(sizeKey)||"{}"); size=saved.noteFont ?? saved.font; } catch {}
+    document.documentElement.style.setProperty("--task-size",
+      Number.isFinite(size) && size>=11 && size<=32 ? size+"px" : "");
+  }
   window.addEventListener("storage",event=>{
+    if(nativeDock && (event.key===sizeKey || event.key===null)) syncDockFont();
     if(![key,recordsKey,selectedKey,languageKey,null].includes(event.key)) return;
     if(nativeDock) document.documentElement.lang=lang();
     else if(event.key!==recordsKey){toolbar();updateDots();}
@@ -182,6 +190,7 @@
   window.CalendarProjects=Object.freeze({find,active,tagRow,selectOptions,refresh:schedule,langChanged(){toolbar();schedule();},
     mount(records,open){listRecords=records;openNote=open;bindToolbar();dock();}});
   if(nativeDock) {
+    syncDockFont();
     document.documentElement.lang=lang();dock();
     host?.addEventListener("message",e=>{if(e.data==="collapse"){openGroup=null;dock();}});
   }

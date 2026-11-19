@@ -46,7 +46,7 @@
 .dock-item { display:grid; gap:2px; width:100%; text-align:left; background:transparent; color:#19384d; padding:7px 2px; border-bottom:1px solid #cee0e7 !important; }
 .dock-item:hover { background:#e0eef3; }
 .dock-item time,.dock-empty { font-size:11px; color:#4f6570; }
-.dock-item span { overflow-wrap:anywhere; white-space:pre-wrap; }
+.dock-item span { font-size:var(--task-size,13px); overflow-wrap:anywhere; white-space:pre-wrap; }
 .dock-item[data-done=true] span { text-decoration:line-through; }
 .dock-empty { margin:9px 0 2px; }
 @container calendar (max-width: 585px) {

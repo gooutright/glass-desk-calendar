@@ -47,6 +47,10 @@
     settings: ["设置", "Settings"], language: ["语言", "Language"], width: ["月历宽度", "Calendar width"],
     taskActions: ["待办操作", "Task actions"], editTask: ["编辑", "Edit"], deleteTask: ["删除", "Delete"],
     taskNote: ["待办笔记", "Task note"], noteTitle: ["待办标题", "Task title"],
+    formatNote: ["笔记文字格式", "Note formatting"], textSize: ["文字字号", "Text size"], defaultSize: ["默认字号", "Default size"],
+    bold: ["加粗", "Bold"], underline: ["下划线", "Underline"], textColor: ["选择文字颜色", "Choose text color"],
+    highlight: ["选择荧光笔颜色", "Choose highlight color"], applyColor: ["应用或移除文字颜色", "Apply or remove text color"],
+    applyHighlight: ["应用或擦除荧光笔", "Apply or remove highlight"],
     noteBody: ["笔记正文", "Notes"], notePrompt: ["写下详细内容…", "Write a note…"],
     insertPhoto: ["插入图片", "Add image"], insertPhotoHelp: ["选择本地图片，或在正文按 Ctrl+V 粘贴截图", "Choose an image or paste a screenshot into the note"],
     removePhoto: ["移除图片", "Remove image"], viewPhoto: ["查看大图", "View full image"], closePhoto: ["关闭大图", "Close image"],
@@ -55,13 +59,13 @@
     missingPhoto: ["原图未能读取，可重新打开笔记重试", "Could not read this image. Reopen the note to try again."],
     photoSaveError: ["图片没有保存，请检查浏览器存储空间后重试", "Could not save the images. Check browser storage and try again."],
     noteConflict: ["此记录已在其他窗口更改，请复制本次改动后重新打开", "This record changed in another window. Copy your edits and reopen it."],
-    exportIllustrated: ["导出含图片的 HTML", "Export HTML with images"], exportImageError: ["有图片无法读取，图文导出未完成", "An image could not be read. The export did not finish."],
+    exportIllustrated: ["导出图文与格式 HTML", "Export formatted HTML with images"], exportImageError: ["有图片无法读取，图文导出未完成", "An image could not be read. The export did not finish."],
     exportFileError: ["文件没有写入，请换个位置重试", "Could not save the file. Try a different location."],
     cancelNote: ["取消", "Cancel"], saveNote: ["保存", "Save"], titleRequired: ["请填写待办标题", "Enter a task title"],
     desktopMode: ["固定在桌面", "Pin to desktop"], quitApp: ["退出月历", "Quit calendar"],
     moveWindow: ["拖动标题移动月历", "Drag the heading to move the calendar"],
     closeSettings: ["关闭设置", "Close settings"],
-    height: ["月历高度", "Calendar height"], font: ["字体大小", "Font size"], leading: ["清单行距", "Line spacing"],
+    height: ["月历高度", "Calendar height"], calendarFont: ["日历字号", "Calendar font size"], noteFont: ["便签字号", "Note font size"], leading: ["清单行距", "Line spacing"],
     reset: ["恢复默认大小", "Reset sizes"], export: ["导出记录", "Export records"], exportHelp: ["导出所有月份的记录为 CSV", "Export all months as CSV"],
     dragWidth: ["拖动左边缘调整宽度", "Drag the left edge to resize"], dragHeight: ["拖动下边缘调整高度", "Drag the bottom edge to resize"],
     dragBoth: ["拖动左下角调整月历大小", "Drag the bottom-left corner to resize"],
@@ -154,7 +158,8 @@
     const saved = JSON.parse(localStorage.getItem(sizeKey) || "{}");
     for (const input of sizeInputs) {
       const name = input.dataset.setting;
-      const value = saved?.[name];
+      const legacy = Number.isFinite(saved?.font) && saved.font >= 11 && saved.font <= 28 ? saved.font : undefined;
+      const value = saved?.[name] ?? (name === "noteFont" ? legacy : name === "calendarFont" && legacy ? legacy + 1 : undefined);
       if (Number.isFinite(value) && value > 0 &&
           (!input.min || value >= Number(input.min)) && (!input.max || value <= Number(input.max))) {
         sizes[name] = value;
@@ -203,7 +208,7 @@
       setFeedback(null);
       return previous;
     } catch (error) {
-      if (error.message === "noteConflict" || (expectedNote && (photoRefs(expectedNote).length || photoRefs(patch).length))) throw error;
+      if (expectedNote || error.message === "noteConflict") throw error;
       pendingChanges.push(change);
       applyChange(records, change);
       projects.refresh();
@@ -243,7 +248,8 @@
     const textStyle = getComputedStyle(days);
     const fontSize = parseFloat(textStyle.fontSize);
     const values = {
-      width: Math.round(rect.width), height: Math.round(rect.height), font: Math.round(fontSize),
+      width: Math.round(rect.width), height: Math.round(rect.height), noteFont: Math.round(fontSize),
+      calendarFont: sizes.calendarFont || Math.round(parseFloat(getComputedStyle(days.querySelector(".day-number") || document.querySelector(".mini-title") || panel).fontSize)),
       leading: Math.round(100 * parseFloat(textStyle.lineHeight) / fontSize)
     };
     for (const input of sizeInputs) {
@@ -272,7 +278,9 @@
   function applySizes() {
     panel.style.width = sizes.width ? sizes.width + "px" : "";
     panel.style.height = sizes.height ? sizes.height + "px" : "";
-    panel.style.setProperty("--task-size", sizes.font ? sizes.font + "px" : "");
+    document.documentElement.style.setProperty("--task-size", sizes.noteFont ? sizes.noteFont + "px" : "");
+    panel.style.setProperty("--calendar-size", sizes.calendarFont ? sizes.calendarFont + "px" : "");
+    panel.style.setProperty("--calendar-title-size", sizes.calendarFont ? sizes.calendarFont * 1.85 + "px" : "");
     panel.style.setProperty("--leading", sizes.leading ? String(sizes.leading / 100) : "");
     queueLayout();
   }
@@ -287,7 +295,7 @@
     sizeMenu.hidden = !open;
     sizeToggle.setAttribute("aria-expanded", String(open));
     if (open) {
-      document.getElementById("export-illustrated").hidden = !records.some(item => photoRefs(item).length);
+      document.getElementById("export-illustrated").hidden = !records.some(item => item.note || photoRefs(item).length);
       syncSizeControls();
     }
   }
@@ -580,11 +588,12 @@
   function displayLanguage() {
     document.documentElement.lang = locale;
     projects.langChanged();
+    noteBody.dataset.placeholder = t("notePrompt");
     document.title = t("title");
     if (isDesktop) host.postMessage("lang=" + locale);
     document.getElementById("language").value = locale;
     panel.style.setProperty("--write-hint", JSON.stringify(t("write")));
-    document.querySelectorAll("[data-placeholder]").forEach(node => { node.placeholder = t(node.dataset.placeholder); });
+    document.querySelectorAll("input[data-placeholder],textarea[data-placeholder]").forEach(node => { node.placeholder = t(node.dataset.placeholder); });
     document.querySelectorAll("[data-copy]").forEach(node => { node.textContent = t(node.dataset.copy); });
     document.querySelectorAll("[data-aria]").forEach(node => node.setAttribute("aria-label", t(node.dataset.aria)));
     document.querySelectorAll("[data-tip]").forEach(node => { node.title = t(node.dataset.tip); });
@@ -766,14 +775,17 @@
         if (lastDate !== item.date) { chunks.push("<h2>" + htmlText(item.date) + "</h2>"); lastDate = item.date; }
         const project=projects.find(item.projectId);
         chunks.push("<article><h3>" + htmlText(item.text) + "</h3><small>" + t(item.done ? "completed" : "pending") + ' · <span style="color:' + project.color + '">●</span> ' + htmlText(project.name) + "</small>");
-        for (const part of noteParts(item)) {
-          if (typeof part === "string") {
-            if (part) chunks.push("<p>" + htmlText(part) + "</p>");
+        chunks.push('<div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:' + getComputedStyle(days).fontSize + '">');
+        for (const part of CalendarRichNote.parts(item,noteParts(item))) {
+          if (part.photo) {
+            const blob = await readPhoto(part.photo.id);
+            chunks.push('<img alt="' + htmlText(part.photo.name) + '" src="', await dataURL(blob), '">');
           } else {
-            const blob = await readPhoto(part.id);
-            chunks.push('<img alt="' + htmlText(part.name) + '" src="', await dataURL(blob), '">');
+            const style = CalendarRichNote.css(part.attributes);
+            chunks.push(style ? '<span style="' + style + '">' + htmlText(part.text) + '</span>' : htmlText(part.text));
           }
         }
+        chunks.push("</div>");
         chunks.push("</article>");
       }
       chunks.push("<\/body></html>");
@@ -786,7 +798,6 @@
   const note = document.getElementById("task-note");
   const noteForm = document.getElementById("note-form");
   const noteTitle = document.getElementById("note-title");
-  const noteBody = document.getElementById("note-body");
   const noteDocument = document.getElementById("note-document");
   const noteFiles = document.getElementById("note-files");
   const noteMessage = document.getElementById("note-message");
@@ -796,12 +807,15 @@
   let noteRow = null;
   let draft = null;
   let databasePromise = null;
+  const rich = CalendarRichNote.create(noteDocument,paintPhoto);
+  const noteBody = rich.root;
 
   function photoRefs(item) {
     return Array.isArray(item?.noteImages) ? item.noteImages : [];
   }
   function sameNote(a, b) {
-    return (a.note || "") === (b.note || "") && JSON.stringify(photoRefs(a)) === JSON.stringify(photoRefs(b));
+    return (a.note || "") === (b.note || "") && JSON.stringify(photoRefs(a)) === JSON.stringify(photoRefs(b)) &&
+      JSON.stringify(a.noteStyles || []) === JSON.stringify(b.noteStyles || []);
   }
   // Offsets use the same UTF-16 indices as a textarea selection. Older text-only records need no migration.
   function noteParts(item) {
@@ -857,112 +871,57 @@
       await writePhotos([], ids.filter(id => !referenced.has(id)));
     } catch { /* A later cleanup must never cost a referenced original. */ }
   }
-  function fitNoteText(area) {
-    area.style.flexGrow = "0";
-    area.style.height = "0px";
-    area.style.height = area.scrollHeight + "px";
-    area.style.removeProperty("flex-grow");
-  }
-  function fitNoteDocument() {
-    if (note.open) noteDocument.querySelectorAll(".note-text").forEach(fitNoteText);
-  }
-  function revealFirstLine(area) {
-    const viewport = noteDocument.getBoundingClientRect();
-    const top = area.getBoundingClientRect().top;
-    const bottom = top + parseFloat(getComputedStyle(area).lineHeight) + 6;
-    if (bottom > viewport.bottom) noteDocument.scrollTop += bottom - viewport.bottom;
-    else if (top < viewport.top) noteDocument.scrollTop += top - viewport.top;
-  }
-  function textPart(value) {
-    const area = document.createElement("textarea");
-    area.className = "note-text";
-    area.rows = 1;
-    area.value = value;
-    area.setAttribute("aria-label", t("noteBody"));
-    return area;
-  }
-  function photoPart(ref, file = null) {
-    const owner = draft;
-    const figure = document.createElement("figure");
-    figure.className = "note-photo";
-    figure.dataset.imageId = ref.id;
-    const view = document.createElement("button");
-    view.type = "button";
+  function paintPhoto(figure, id) {
+    const owner = draft, photo = owner?.photos.get(id);
+    if (!photo) return;
+    const view = document.createElement("button"), remove = document.createElement("button");
+    view.type = remove.type = "button";
     view.className = "note-photo-view";
     view.disabled = true;
     view.textContent = t("loadingPhoto");
-    view.setAttribute("aria-label", t("viewPhoto") + " · " + ref.name);
-    const remove = document.createElement("button");
-    remove.type = "button";
+    view.setAttribute("aria-label", t("viewPhoto") + " · " + photo.name);
     remove.className = "note-photo-remove";
     remove.textContent = "×";
-    remove.title = t("removePhoto") + " · " + ref.name;
+    remove.title = t("removePhoto") + " · " + photo.name;
     remove.setAttribute("aria-label", remove.title);
-    const image = document.createElement("img");
-    image.alt = ref.name;
-    image.decoding = "async";
     figure.append(view, remove);
-    const photo = {id:ref.id, name:ref.name, file, url:null, loaded:false, ready:null};
-    owner.photos.set(ref.id, photo);
-    photo.ready = (async () => {
-      try {
-        const blob = file || await readPhoto(ref.id);
-        if (draft !== owner || !owner.photos.has(ref.id)) return;
-        photo.url = URL.createObjectURL(blob);
-        image.src = photo.url;
-        await image.decode();
-        if (draft !== owner || !owner.photos.has(ref.id)) return;
-        photo.loaded = true;
-        const cursor = document.activeElement;
-        const followsPhoto = cursor.matches(".note-text") && noteDocument.contains(cursor) &&
-          (figure.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING);
-        const cursorTop = followsPhoto ? cursor.getBoundingClientRect().top : 0;
-        view.replaceChildren(image);
-        view.disabled = false;
-        if (followsPhoto) {
-          noteDocument.scrollTop += cursor.getBoundingClientRect().top - cursorTop;
-          if (cursor.selectionEnd === 0) revealFirstLine(cursor);
-        }
-      } catch {
-        if (draft !== owner || !owner.photos.has(ref.id)) return;
-        const message = t(file ? "unsupportedPhoto" : "missingPhoto");
-        view.textContent = ref.name;
-        noteMessage.textContent = ref.name + " · " + message;
-      }
+    if (!photo.ready) photo.ready = (async () => {
+      const blob = photo.file || await readPhoto(id);
+      if (draft !== owner) return;
+      photo.url = URL.createObjectURL(blob);
+      const image = new Image();
+      image.src = photo.url;
+      await image.decode();
+      photo.loaded = true;
     })();
-    return figure;
+    photo.ready.then(() => {
+      if (draft !== owner || !photo.loaded) return;
+      const image = new Image();
+      image.alt = photo.name;
+      image.src = photo.url;
+      view.replaceChildren(image);
+      view.disabled = false;
+    }).catch(() => {
+      if (draft !== owner) return;
+      view.textContent = photo.name;
+      noteMessage.textContent = photo.name + " · " + t(photo.file ? "unsupportedPhoto" : "missingPhoto");
+    });
   }
   function resetPhotoDraft() {
     if (draft) for (const photo of draft.photos.values()) if (photo.url) URL.revokeObjectURL(photo.url);
     draft = null;
-    noteDocument.replaceChildren(noteBody);
+    rich.reset({}, []);
     noteDocument.classList.remove("drag-over");
-    noteBody.value = "";
-    noteBody.placeholder = t("notePrompt");
     noteMessage.textContent = "";
     noteFiles.value = "";
     noteForm.inert = false;
   }
   function fillNoteDocument(item) {
     resetPhotoDraft();
-    draft = {original:item, photos:new Map(), active:noteBody, saving:false};
-    const [first, ...parts] = noteParts(item);
-    noteBody.value = first;
-    if (parts.length) noteBody.placeholder = "";
-    for (const part of parts) noteDocument.append(typeof part === "string" ? textPart(part) : photoPart(part));
-    noteDocument.scrollTop = 0;
-  }
-  function readNoteDocument() {
-    let text = "";
-    const images = [];
-    for (const part of noteDocument.children) {
-      if (part.matches("textarea")) text += part.value;
-      else {
-        const photo = draft.photos.get(part.dataset.imageId);
-        images.push({id:photo.id, name:photo.name, at:text.length});
-      }
-    }
-    return {text, images};
+    const photos = new Map(photoRefs(item).map(ref => [ref.id,{id:ref.id,name:ref.name}]));
+    draft = {original:item, photos, saving:false};
+    rich.reset(item, noteParts(item));
+    noteBody.scrollTop = 0;
   }
   function insertPhotos(files) {
     if (!draft || draft.saving || !files.length) return;
@@ -976,46 +935,13 @@
       else noteMessage.textContent = (file.name || t("picture")) + " · " + t("unsupportedPhoto");
     }
     if (!accepted.length) return;
-    const area = draft.active;
-    const split = area.selectionEnd;
-    const tail = area.value.slice(split);
-    area.value = area.value.slice(0, split);
-    const fragment = document.createDocumentFragment();
-    let after;
-    for (const file of accepted) {
-      const id = globalThis.crypto?.randomUUID?.() || "img-" + Date.now().toString(36) + "-" + (++sequence) + "-" + Math.random().toString(36).slice(2);
-      fragment.append(photoPart({id, name:file.name || t("picture")}, file));
-      after = textPart("");
-      fragment.append(after);
-    }
-    after.value = tail;
-    area.after(fragment);
-    noteBody.placeholder = "";
-    fitNoteDocument();
-    draft.active = after;
-    after.focus({preventScroll:true});
-    after.setSelectionRange(0, 0);
-    revealFirstLine(after);
+    const ids = accepted.map(file => {
+      const id = crypto.randomUUID();
+      draft.photos.set(id, {id, name:file.name || t("picture"), file});
+      return id;
+    });
+    rich.addPhotos(ids);
   }
-  function removePhoto(figure) {
-    if (!draft || draft.saving || !figure?.matches(".note-photo")) return;
-    const before = figure.previousElementSibling, after = figure.nextElementSibling;
-    const cursor = before.value.length;
-    before.value += after.value;
-    const photo = draft.photos.get(figure.dataset.imageId);
-    draft.photos.delete(photo.id);
-    if (photo.url) URL.revokeObjectURL(photo.url);
-    figure.remove();
-    after.remove();
-    draft.active = before;
-    before.focus({preventScroll:true});
-    before.setSelectionRange(cursor, cursor);
-    if (!draft.photos.size) noteBody.placeholder = t("notePrompt");
-    noteMessage.textContent = "";
-    fitNoteDocument();
-  }
-  noteDocument.addEventListener("input", event => { if (event.target.matches(".note-text")) fitNoteText(event.target); });
-  noteDocument.addEventListener("focusin", event => { if (draft && event.target.matches(".note-text")) draft.active = event.target; });
   document.getElementById("add-note-photo").addEventListener("click", () => noteFiles.click());
   noteFiles.addEventListener("change", () => {
     insertPhotos([...noteFiles.files]);
@@ -1044,8 +970,8 @@
         } catch {}
       }
     }
-    if (files.length) { event.preventDefault(); insertPhotos(files); }
-  });
+    if (files.length) { event.preventDefault(); event.stopPropagation(); insertPhotos(files); }
+  }, true);
   noteForm.addEventListener("dragover", event => {
     if (!event.dataTransfer.types.includes("Files")) return;
     event.preventDefault();
@@ -1059,14 +985,21 @@
     noteDocument.classList.remove("drag-over");
     if (!event.dataTransfer.files.length) return;
     event.preventDefault();
-    if (event.target.matches(".note-text")) draft.active = event.target;
+    event.stopPropagation();
+    const point = document.caretRangeFromPoint(event.clientX,event.clientY);
+    if (point && noteBody.contains(point.startContainer)) {
+      noteBody.focus({preventScroll:true});
+      const selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(point);
+    }
     insertPhotos([...event.dataTransfer.files]);
-  });
+  }, true);
   noteDocument.addEventListener("click", event => {
     const button = event.target.closest("button");
     if (!button || !draft) return;
     const figure = button.closest(".note-photo");
-    if (button.matches(".note-photo-remove")) { removePhoto(figure); return; }
+    if (button.matches(".note-photo-remove")) { rich.removePhoto(figure); return; }
     const photo = draft.photos.get(figure.dataset.imageId);
     if (!photo?.loaded) return;
     fullPhoto.alt = photo.name;
@@ -1075,23 +1008,6 @@
   });
   document.getElementById("photo-close").addEventListener("click", () => photoPreview.close());
   photoPreview.addEventListener("close", () => fullPhoto.removeAttribute("src"));
-  noteDocument.addEventListener("keydown", event => {
-    const area = event.target;
-    if (!area.matches(".note-text") || event.isComposing || event.keyCode === 229 ||
-      event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || area.selectionStart !== area.selectionEnd) return;
-    const backward = ["ArrowLeft", "Backspace"].includes(event.key) && area.selectionStart === 0;
-    const forward = ["ArrowRight", "Delete"].includes(event.key) && area.selectionEnd === area.value.length;
-    if (!backward && !forward) return;
-    const figure = backward ? area.previousElementSibling : area.nextElementSibling;
-    if (!figure) return;
-    event.preventDefault();
-    if (event.key === "Backspace" || event.key === "Delete") { removePhoto(figure); return; }
-    const nextArea = backward ? figure.previousElementSibling : figure.nextElementSibling;
-    nextArea.focus();
-    nextArea.setSelectionRange(backward ? nextArea.value.length : 0, backward ? nextArea.value.length : 0);
-  });
-  new ResizeObserver(fitNoteDocument).observe(noteDocument);
-
   function clampWithin(value, min, max) {
     return Math.max(min, Math.min(value, max));
   }
@@ -1129,15 +1045,15 @@
     const right = Math.min(document.documentElement.clientWidth - 6, frame.right - 6);
     const top = Math.max(6, frame.top + 6);
     const bottom = Math.min(document.documentElement.clientHeight - 6, frame.bottom - 6);
-    const width = Math.min(right - left, Math.max(265, cell.width * 2.35));
-    const height = Math.min(bottom - top, Math.max(208, cell.height * 2.65));
+    const grid = getComputedStyle(days);
+    const width = Math.min(right - left, Math.max(275, cell.width * 3 + 2 * parseFloat(grid.columnGap)));
+    const height = Math.min(bottom - top, Math.max(240, cell.height * 3 + 2 * parseFloat(grid.rowGap)));
     const x = cell.left + cell.width / 2 - width / 2;
     const y = cell.top + cell.height / 2 - height / 2;
     note.style.width = Math.round(width) + "px";
     note.style.height = Math.round(height) + "px";
     note.style.left = Math.round(clampWithin(x, left, right - width)) + "px";
     note.style.top = Math.round(clampWithin(y, top, bottom - height)) + "px";
-    note.style.setProperty("--note-size", getComputedStyle(days).fontSize);
   }
 
   function openNote(row) {
@@ -1155,9 +1071,7 @@
     fillNoteDocument(item);
     positionNote();
     note.showModal();
-    fitNoteDocument();
-    noteBody.focus({preventScroll: true});
-    noteBody.setSelectionRange(noteBody.value.length, noteBody.value.length);
+    rich.focus();
   }
 
   function closeNote() {
@@ -1216,28 +1130,30 @@
       return;
     }
     const item = draft.original;
-    const {text, images} = readNoteDocument();
+    const {text, images, styles} = rich.read(draft.photos);
     const patch = {};
     if (item.text !== title) patch.text = title;
     const assigned=document.getElementById("note-project").value;
     if ((item.projectId || "")!==assigned) patch.projectId=assigned;
     if ((item.note || "") !== text) patch.note = text;
     if (JSON.stringify(photoRefs(item)) !== JSON.stringify(images)) patch.noteImages = images;
-    const photos = [...draft.photos.values()];
+    if (JSON.stringify(item.noteStyles || []) !== JSON.stringify(styles)) patch.noteStyles = styles;
+    const photos = images.map(ref => draft.photos.get(ref.id));
     const additions = photos.filter(photo => photo.file);
     draft.saving = true;
     noteForm.inert = true;
     try {
       if (Object.keys(patch).length) {
         if (photos.length) {
-          await Promise.all(photos.map(photo => photo.ready));
+          await Promise.allSettled(photos.map(photo => photo.ready));
           const failed = photos.find(photo => !photo.loaded);
           if (failed) throw new Error(failed.file ? "unsupportedPhoto" : "missingPhoto");
         }
         // Publish metadata only after all original blobs have committed.
         if (additions.length) await writePhotos(additions, []);
         changeRecord(item.id, patch, false, item);
-        const removed = photoRefs(item).filter(ref => !draft.photos.has(ref.id)).map(ref => ref.id);
+        const retained = new Set(images.map(ref => ref.id));
+        const removed = photoRefs(item).filter(ref => !retained.has(ref.id)).map(ref => ref.id);
         void discardUnreferenced(removed);
       }
       const area = noteRow.querySelector(".task");
@@ -1252,7 +1168,7 @@
       draft.saving = false;
       noteForm.inert = false;
       noteMessage.textContent = t(["noteConflict","unsupportedPhoto","missingPhoto"].includes(error.message) ? error.message : "photoSaveError");
-      draft.active.focus({preventScroll:true});
+      noteBody.focus({preventScroll:true});
     }
   });
   document.getElementById("note-cancel").addEventListener("click", closeNote);

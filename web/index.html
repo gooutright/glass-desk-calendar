@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>桌面月历 · 点写清单</title>
+  <link rel="stylesheet" href="vendor/quill.core.css">
   <link rel="stylesheet" href="calendar.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="projects.css">
+  <link rel="stylesheet" href="note-format.css">
 </head>
 <body>
   <svg class="lens-defs" aria-hidden="true" focusable="false"><defs id="lens-definitions"></defs></svg>
@@ -59,7 +61,8 @@
           </label>
           <label><span data-copy="width">月历宽度</span><input id="size-width" data-setting="width" type="range"><output id="size-width-out" for="size-width"></output></label>
           <label><span data-copy="height">月历高度</span><input id="size-height" data-setting="height" type="range"><output id="size-height-out" for="size-height"></output></label>
-          <label><span data-copy="font">字体大小</span><input id="size-font" data-setting="font" type="range" min="11" max="28"><output id="size-font-out" for="size-font"></output></label>
+          <label><span data-copy="calendarFont">日历字号</span><input id="size-calendar-font" data-setting="calendarFont" type="range" min="11" max="32"><output id="size-calendar-font-out" for="size-calendar-font"></output></label>
+          <label><span data-copy="noteFont">便签字号</span><input id="size-note-font" data-setting="noteFont" type="range" min="11" max="32"><output id="size-note-font-out" for="size-note-font"></output></label>
           <label><span data-copy="leading">清单行距</span><input id="size-leading" data-setting="leading" type="range" min="110" max="210" step="5"><output id="size-leading-out" for="size-leading"></output></label>
           <label class="native-only pin-row"><span data-copy="desktopMode">固定在桌面</span><input id="pin-window" type="checkbox" checked></label>
           <a id="holiday-source" target="_blank" rel="noopener noreferrer"></a>
@@ -71,7 +74,7 @@
               <i class="download-icon" aria-hidden="true"></i><span data-copy="export">导出记录</span>
             </button>
           </div>
-          <button id="export-illustrated" type="button" data-copy="exportIllustrated" hidden>导出含图片的 HTML</button>
+          <button id="export-illustrated" type="button" data-copy="exportIllustrated" hidden>导出图文与格式 HTML</button>
           <button class="native-only quit" id="quit-app" type="button" data-copy="quitApp">退出月历</button>
         </section>
       </header>
@@ -113,10 +116,15 @@
         <time id="note-date"></time>
       </div>
       <input id="note-title" type="text" data-aria="noteTitle" data-placeholder="noteTitle" autocomplete="off" required>
-      <div id="note-document" class="note-document" role="group" data-aria="noteBody">
-        <textarea id="note-body" class="note-text" rows="1" data-aria="noteBody" data-placeholder="notePrompt" autofocus></textarea>
-      </div>
+      <div id="note-document" class="note-document" role="group" data-aria="noteBody"></div>
       <p id="note-message" role="status"></p>
+      <div id="note-format" role="toolbar" data-aria="formatNote">
+        <select id="format-size" data-aria="textSize" data-tip="textSize"><option value="" data-copy="defaultSize">默认字号</option></select>
+        <button id="format-bold" type="button" aria-pressed="false" data-aria="bold" data-tip="bold"><b>B</b></button>
+        <button id="format-underline" type="button" aria-pressed="false" data-aria="underline" data-tip="underline"><u>U</u></button>
+        <span class="format-pair"><button id="apply-color" type="button" aria-pressed="false" data-aria="applyColor" data-tip="applyColor"><span>A</span></button><input id="format-color" type="color" value="#a4374c" data-aria="textColor" data-tip="textColor"></span>
+        <span class="format-pair"><button id="apply-highlight" type="button" aria-pressed="false" data-aria="applyHighlight" data-tip="applyHighlight"><span>ab</span></button><input id="format-highlight" type="color" value="#ffe681" data-aria="highlight" data-tip="highlight"></span>
+      </div>
       <div class="note-actions">
         <input id="note-files" type="file" accept="image/*" multiple hidden>
         <button id="add-note-photo" type="button" data-tip="insertPhotoHelp">
@@ -133,6 +141,8 @@
     <button id="photo-close" type="button" data-aria="closePhoto" autofocus>×</button>
   </dialog>
   <aside id="project-dock"></aside>
+  <script src="vendor/quill.js"></script>
+  <script src="rich-note.js"></script>
   <script src="projects.js"></script>
   <script src="calendar.js"></script>
 </body>
