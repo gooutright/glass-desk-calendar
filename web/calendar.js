@@ -2,6 +2,7 @@
   "use strict";
   const host = window.chrome?.webview;
   const isDesktop = Boolean(host) && location.hostname === "calendar.example";
+  const projects = window.CalendarProjects;
   document.documentElement.classList.toggle("native", isDesktop);
   const recordKey = "desktop-calendar-sketch.records.v1";
   const transparencyKey = "desktop-calendar-sketch.transparency.v1";
@@ -192,10 +193,12 @@
       for (const pending of pendingChanges) applyChange(latest, pending);
       const previous = latest.find(item => item.id === id);
       if (expectedNote && (!previous || !sameNote(previous, expectedNote) ||
-          (Object.hasOwn(patch, "text") && previous.text !== expectedNote.text))) throw new Error("noteConflict");
+          (Object.hasOwn(patch, "text") && previous.text !== expectedNote.text) ||
+          (Object.hasOwn(patch, "projectId") && (previous.projectId || "") !== (expectedNote.projectId || "")))) throw new Error("noteConflict");
       applyChange(latest, change);
       localStorage.setItem(recordKey, JSON.stringify(latest));
       records = latest;
+      projects.refresh();
       pendingChanges.length = 0;
       setFeedback(null);
       return previous;
@@ -203,6 +206,7 @@
       if (error.message === "noteConflict" || (expectedNote && (photoRefs(expectedNote).length || photoRefs(patch).length))) throw error;
       pendingChanges.push(change);
       applyChange(records, change);
+      projects.refresh();
       setFeedback("temporary");
     }
   }
@@ -363,7 +367,7 @@
       return;
     }
     if (!existing) {
-      changeRecord(row.dataset.id, {date: row.closest(".day").dataset.date, text, done: checked}, true);
+      changeRecord(row.dataset.id, {date: row.closest(".day").dataset.date, text, done: checked, projectId: row.dataset.projectId || ""}, true);
       return;
     }
     const patch = {};
@@ -391,6 +395,7 @@
     area.value = item?.text || "";
     row.classList.toggle("done", box.checked);
     row.append(box, area);
+    projects.tagRow(row,item ? item.projectId : projects.active());
     return row;
   }
 
@@ -558,12 +563,7 @@
         name.className = "holiday-name";
         name.textContent = occasion.name;
         mark.append(t(occasion.kind), name);
-        dayHeading.append(mark);
-      } else if (date.getDay() === 6 || date.getDay() === 0) {
-        const mark = document.createElement("span");
-        mark.className = "weekend-mark";
-        mark.textContent = t(date.getDay() === 6 ? "saturday" : "sunday");
-        dayHeading.append(mark);
+        number.after(mark);
       }
       const list = document.createElement("div");
       list.className = "entries";
@@ -579,6 +579,7 @@
 
   function displayLanguage() {
     document.documentElement.lang = locale;
+    projects.langChanged();
     document.title = t("title");
     if (isDesktop) host.postMessage("lang=" + locale);
     document.getElementById("language").value = locale;
@@ -732,11 +733,12 @@
     return [...source].sort((a, b) => a.date.localeCompare(b.date));
   }
   document.getElementById("export").addEventListener("click", () => {
-    const rows = [[t("date"), t("task"), t("status"), t("noteBody")]];
+    const rows = [[t("date"), t("task"), t("status"), t("noteBody"), locale==="en-US" ? "Project" : "项目", locale==="en-US" ? "Project color" : "项目颜色"]];
     const ordered = exportRecords();
     for (const entry of ordered) {
       const body = noteParts(entry).map(part => typeof part === "string" ? part : "\n[" + t("picture") + " · " + part.name + "]\n").join("");
-      rows.push([entry.date, entry.text, t(entry.done ? "completed" : "pending"), body]);
+      const project=projects.find(entry.projectId);
+      rows.push([entry.date, entry.text, t(entry.done ? "completed" : "pending"), body, project.name, project.color]);
     }
     const csv = "\uFEFF" + rows.map(row => row.map(csvField).join(",")).join("\r\n") + "\r\n";
     downloadRecords(new Blob([csv], {type:"text/csv;charset=utf-8"}), "csv", ordered.length);
@@ -762,7 +764,8 @@
       let lastDate = "";
       for (const item of ordered) {
         if (lastDate !== item.date) { chunks.push("<h2>" + htmlText(item.date) + "</h2>"); lastDate = item.date; }
-        chunks.push("<article><h3>" + htmlText(item.text) + "</h3><small>" + t(item.done ? "completed" : "pending") + "</small>");
+        const project=projects.find(item.projectId);
+        chunks.push("<article><h3>" + htmlText(item.text) + "</h3><small>" + t(item.done ? "completed" : "pending") + ' · <span style="color:' + project.color + '">●</span> ' + htmlText(project.name) + "</small>");
         for (const part of noteParts(item)) {
           if (typeof part === "string") {
             if (part) chunks.push("<p>" + htmlText(part) + "</p>");
@@ -1147,6 +1150,7 @@
     const [year, monthNumber, day] = item.date.split("-").map(Number);
     dateLabel.textContent = new Intl.DateTimeFormat(locale, {dateStyle: "full"}).format(new Date(year, monthNumber - 1, day));
     noteTitle.value = item.text;
+    projects.selectOptions(document.getElementById("note-project"),item.projectId);
     noteTitle.setCustomValidity("");
     fillNoteDocument(item);
     positionNote();
@@ -1215,6 +1219,8 @@
     const {text, images} = readNoteDocument();
     const patch = {};
     if (item.text !== title) patch.text = title;
+    const assigned=document.getElementById("note-project").value;
+    if ((item.projectId || "")!==assigned) patch.projectId=assigned;
     if ((item.note || "") !== text) patch.note = text;
     if (JSON.stringify(photoRefs(item)) !== JSON.stringify(images)) patch.noteImages = images;
     const photos = [...draft.photos.values()];
@@ -1235,6 +1241,7 @@
         void discardUnreferenced(removed);
       }
       const area = noteRow.querySelector(".task");
+      projects.tagRow(noteRow,assigned);
       area.value = records.find(record => record.id === item.id)?.text || title;
       fit(area);
       noteRow.querySelector(".check").setAttribute("aria-label", t("check") + " " + area.value);
@@ -1359,7 +1366,7 @@
       if (!event.isPrimary || event.button !== 0) return;
       const edge = event.target.closest("[data-edge]");
       const toolbar = event.target.closest(".toolbar");
-      if (!edge && (!toolbar || event.target.closest("button,label,input,select,a,#settings-menu,nav"))) return;
+      if (!edge && (!toolbar || event.target.closest("button,label,input,select,a,#settings-menu,.project-control,nav"))) return;
       host.postMessage(edge ? "drag=" + edge.dataset.edge : "drag=move");
       event.preventDefault();
     });
@@ -1369,12 +1376,13 @@
   window.CalendarActions = Object.freeze({
     version: 1,
     list: () => structuredClone(exportRecords()),
-    add(date, title) {
+    add(date, title, projectId = projects.active()) {
       const parsed = new Date(date + "T12:00:00");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(parsed) || dateKey(parsed) !== date) throw new TypeError("Invalid date");
       if (typeof title !== "string" || !title.trim()) throw new TypeError("Missing title");
       const id = crypto.randomUUID();
-      changeRecord(id, {date, text:title.trim(), done:false}, true);
+      if ((projectId || "")!==projects.find(projectId).id) throw new TypeError("Unknown project");
+      changeRecord(id, {date, text:title.trim(), done:false, projectId:projectId || ""}, true);
       renderMonth();
       return id;
     },
@@ -1383,6 +1391,10 @@
       const patch = {};
       if (typeof fields?.text === "string" && fields.text.trim()) patch.text = fields.text.trim();
       if (typeof fields?.done === "boolean") patch.done = fields.done;
+      if (Object.hasOwn(fields || {},"projectId")) {
+        if ((fields.projectId || "")!==projects.find(fields.projectId).id) throw new TypeError("Unknown project");
+        patch.projectId=fields.projectId || "";
+      }
       if (!Object.keys(patch).length) throw new TypeError("Supply text or done");
       changeRecord(id, patch);
       renderMonth();
@@ -1405,6 +1417,18 @@
     }
   } catch {}
   setTransparency(initialClarity, false);
+  function openProjectNote(id) {
+    if (note.open) { noteBody.focus(); return; }
+    if (!pendingChanges.length) try { records=readRecords(); } catch {}
+    const record=exportRecords().find(entry=>entry.id===id);
+    if (!record) return;
+    const [year,number]=record.date.split("-").map(Number);
+    month=new Date(year,number-1,1);annual=false;renderMonth();
+    const row=[...days.querySelectorAll(".entry")].find(n=>n.dataset.id===id);
+    if (row) openNote(row);
+  }
+  projects.mount(()=>exportRecords(),openProjectNote);
+  if (isDesktop) host.addEventListener("message",e=>{if(typeof e.data==="string" && e.data.startsWith("open-note|"))openProjectNote(e.data.slice(10));});
   applySizes();
   displayLanguage();
 })();

@@ -15,8 +15,8 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("Glass Desk Calendar")]
 [assembly: AssemblyProduct("Glass Desk Calendar")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace GlassDeskCalendar
 {
@@ -54,6 +54,7 @@ namespace GlassDeskCalendar
         readonly Forms.ToolStripMenuItem showMenu, pinMenu, exitMenu;
         DesktopPlacement position;
         RecordExport exporter;
+        ProjectDockWindow dock;
         bool english, closing;
         bool wantedPin = true;
         Rectangle? previousBounds;
@@ -84,6 +85,7 @@ namespace GlassDeskCalendar
             Closing += delegate {
                 closing=true;
                 if (position!=null) { position.Stop(); SaveState(); }
+                if (dock!=null) { dock.End(); dock=null; }
             };
             Closed += delegate { tray.Visible=false; tray.Dispose(); menu.Dispose(); view.Dispose(); };
         }
@@ -104,6 +106,7 @@ namespace GlassDeskCalendar
         {
             if (position==null) return;
             Rectangle r=position.Bounds;
+            if(dock!=null&&!closing)dock.Align();
             string data=String.Format(CultureInfo.InvariantCulture,"{0},{1},{2},{3},{4}",r.X,r.Y,r.Width,r.Height,wantedPin ? 1 : 0);
             try {
                 string tmp=GeometryFile+".tmp";
@@ -170,6 +173,12 @@ namespace GlassDeskCalendar
                 };
                 SetPinned(wantedPin);
                 core.Navigate(Address);
+                dock=new ProjectDockWindow(env,delegate{return position.Bounds;},delegate{return position.Pinned;},delegate(string id){
+                    if(closing)return;
+                    if(!position.Pinned)Activate();
+                    core.PostWebMessageAsString("open-note|"+id);view.Focus();
+                },Log);
+                dock.Show();
             } catch (WebView2RuntimeNotFoundException ex) {
                 Log(ex);
                 if (MessageBox.Show("桌面月历需要 Microsoft Edge WebView2 Runtime。现在打开微软下载页？","Glass Desk Calendar",MessageBoxButton.YesNo,MessageBoxImage.Information)==MessageBoxResult.Yes)

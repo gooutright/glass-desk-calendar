@@ -30,6 +30,7 @@ namespace GlassDeskCalendar
         readonly IntPtr window;
         readonly DispatcherTimer dragging = new DispatcherTimer(DispatcherPriority.Input);
         readonly Action save;
+        readonly int minimumWidth, minimumHeight;
         Point dragOrigin;
         Rectangle initial;
         string handle;
@@ -37,9 +38,10 @@ namespace GlassDeskCalendar
         public bool Pinned { get; private set; }
         public double Scale { get { return Math.Max(96u, GetDpiForWindow(window)) / 96.0; } }
         public Rectangle Bounds { get { Rect r; GetWindowRect(window, out r); return Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom); } }
-        public DesktopPlacement(IntPtr hwnd, Action onFinish)
+        public DesktopPlacement(IntPtr hwnd, Action onFinish, int minWidth=350, int minHeight=320)
         {
             window = hwnd; save = onFinish;
+            minimumWidth=minWidth; minimumHeight=minHeight;
             dragging.Interval = TimeSpan.FromMilliseconds(16);
             dragging.Tick += DragTick;
         }
@@ -54,8 +56,8 @@ namespace GlassDeskCalendar
         Rectangle Fit(Rectangle box)
         {
             Rectangle work = Screen.FromRectangle(box).WorkingArea;
-            box.Width = Math.Min(work.Width, Math.Max((int)Math.Ceiling(350*Scale), box.Width));
-            box.Height = Math.Min(work.Height, Math.Max((int)Math.Ceiling(320*Scale), box.Height));
+            box.Width = Math.Min(work.Width, Math.Max((int)Math.Ceiling(minimumWidth*Scale), box.Width));
+            box.Height = Math.Min(work.Height, Math.Max((int)Math.Ceiling(minimumHeight*Scale), box.Height));
             box.X = Math.Min(work.Right-box.Width, Math.Max(work.Left,box.X));
             box.Y = Math.Min(work.Bottom-box.Height, Math.Max(work.Top,box.Y));
             return box;

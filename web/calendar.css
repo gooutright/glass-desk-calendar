@@ -169,6 +169,11 @@ input[type="range"] { accent-color: var(--accent); cursor: pointer; min-width: 0
 .holiday-mark { max-width: 100%; padding: 1px 5px; border-radius: 99px; background: rgb(var(--control) / .78); color: var(--accent); border: 1px solid var(--line); }
 .holiday-mark.work, .holiday-mark.observed { border-style: dashed; }
 .holiday-name { margin-inline-start: 3px; }
+.day-heading:has(.holiday-mark) { flex-wrap: nowrap; }
+.day-heading .holiday-mark { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #245b40; background: rgb(224 242 229 / .93); border-color: #9abbab; }
+.day-heading .holiday-mark.work { color: #4b5459; background: rgb(235 239 239 / .92); border-color: #9ea9ae; }
+.day-heading .holiday-mark .holiday-name { display: inline; }
+.day-heading:has(.holiday-mark) .month-mark { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .entries { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; }
 .day:hover .entries:empty::before { content: var(--write-hint); display: block; padding: 2px 3px; color: var(--faint); font-size: max(10px, calc(var(--task-size) - 2px)); }
 .entry { --check-size: clamp(11px, calc(var(--task-size) * .87), 18px); display: grid; grid-template-columns: var(--check-size) minmax(0, 1fr); align-items: start; gap: 5px; padding: 1px 2px; margin-bottom: 2px; border-radius: 5px; }

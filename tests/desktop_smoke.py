@@ -111,12 +111,15 @@ def start(browser_api, directory):
             raise AssertionError("App exited during launch with code " + str(process.returncode))
         with urlopen(url + "/json/list", timeout=1) as response:
             targets = json.load(response)
-            return url if any(t.get("url","").startswith("https://calendar.example/") for t in targets) else None
+            return url if any(t.get("url")=="https://calendar.example/index.html" for t in targets) else None
     try:
         browser = browser_api.connect_over_cdp(wait_for(endpoint))
         context = browser.contexts[0]
-        page = context.pages[0] if context.pages else context.wait_for_event("page")
-        page.wait_for_url("https://calendar.example/index.html")
+        def calendar_page():
+            first=context.pages[0] if context.pages else context.wait_for_event("page")
+            first.wait_for_timeout(50)
+            return next((p for p in context.pages if p.url=="https://calendar.example/index.html"),None)
+        page=wait_for(calendar_page)
         page.locator(".day").first.wait_for()
         return process, page
     except BaseException:
@@ -127,6 +130,9 @@ def start(browser_api, directory):
 
 def quit_app(process, page):
     try:
+        for h in windows():
+            if belongs(h,process) and window_string(USER32.GetClassNameW,h)=="#32770":
+                USER32.SendMessageW(USER32.GetDlgItem(h,2),0x00F5,0,None)
         page.evaluate("chrome.webview.postMessage('quit')")
         process.wait(timeout=12)
     finally:
