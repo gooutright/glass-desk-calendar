@@ -34,6 +34,7 @@ last-error.txt
 *.zip
 codex-clipboard-*
 *.png
+!/docs/screenshots/calendar-projects.png
 *.jpg
 *.jpeg
 *.gif
