@@ -1,6 +1,6 @@
 using System;
 using System.Drawing;
-using System.Globalization;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -21,9 +21,8 @@ namespace GlassDeskCalendar
         readonly Action<string> openNote;
         readonly Action<Exception> report;
         DesktopPlacement placement;
-        int width=34,height=42;
-        double anchor=.5;
-        Rectangle tabs, panel;
+        int width=43;
+        readonly List<Rectangle> bands=new List<Rectangle>();
         [DllImport("gdi32.dll")] static extern IntPtr CreateRectRgn(int left,int top,int right,int bottom);
         [DllImport("gdi32.dll")] static extern int CombineRgn(IntPtr dest,IntPtr first,IntPtr second,int mode);
         [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr handle);
@@ -35,11 +34,11 @@ namespace GlassDeskCalendar
             calendarBounds=bounds;isPinned=pinned;openNote=open;report=log;
             Title="项目便签 · Project Notes";WindowStyle=WindowStyle.None;AllowsTransparency=true;
             Background=System.Windows.Media.Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;
-            ResizeMode=ResizeMode.NoResize;Width=width;Height=height;
+            ResizeMode=ResizeMode.NoResize;Width=width;Height=42;
             view=new WebView2CompositionControl {DefaultBackgroundColor=Color.Transparent};
             Content=view;
             SourceInitialized+=delegate {
-                placement=new DesktopPlacement(new WindowInteropHelper(this).Handle,StoreAnchor,1,1);
+                placement=new DesktopPlacement(new WindowInteropHelper(this).Handle,delegate{},1,1);
                 Align();
             };
             Loaded+=async delegate {
@@ -72,25 +71,17 @@ namespace GlassDeskCalendar
             placement.Pin(isPinned());
             Rectangle work=Screen.FromRectangle(calendarBounds()).WorkingArea;
             int w=Math.Min(work.Width,(int)Math.Ceiling(width*placement.Scale));
-            int h=Math.Min(work.Height,(int)Math.Ceiling(height*placement.Scale));
-            placement.Place(new Rectangle(work.Right-w,work.Top+(int)Math.Round(anchor*(work.Height-h)),w,h));
+            placement.Place(new Rectangle(work.Right-w,work.Top,w,work.Height));
             ClipToContents();
-        }
-        void StoreAnchor()
-        {
-            Rectangle work=Screen.FromRectangle(calendarBounds()).WorkingArea, bounds=placement.Bounds;
-            if (work.Height>bounds.Height) anchor=Math.Max(0,Math.Min(1,(bounds.Top-work.Top)/(double)(work.Height-bounds.Height)));
-            if (view.CoreWebView2!=null) view.CoreWebView2.PostWebMessageAsString("dock-anchor|"+anchor.ToString("R",CultureInfo.InvariantCulture));
         }
         void ClipToContents()
         {
-            if (tabs.IsEmpty) return;
             double scale=placement.Scale;
-            IntPtr region=Band(tabs,scale);
-            if (!panel.IsEmpty) {
-                IntPtr list=Band(panel,scale);
-                CombineRgn(region,region,list,2); // RGN_OR: blank space beside a short panel stays clickable.
-                DeleteObject(list);
+            IntPtr region=CreateRectRgn(0,0,0,0);
+            foreach(Rectangle box in bands) {
+                IntPtr part=Band(box,scale);
+                CombineRgn(region,region,part,2); // RGN_OR: only individual folders and the open list receive input.
+                DeleteObject(part);
             }
             if (SetWindowRgn(new WindowInteropHelper(this).Handle,region,true)==0) DeleteObject(region);
         }
@@ -104,23 +95,25 @@ namespace GlassDeskCalendar
             if(e.Source!=Address || shuttingDown)return;
             string command;
             try{command=e.TryGetWebMessageAsString();}catch(ArgumentException){return;}
-            if(command=="dock-drag"){placement.BeginDrag("rail");return;}
-            if(command.StartsWith("dock-anchor|",StringComparison.Ordinal)){
-                double value;
-                if(double.TryParse(command.Substring(12),NumberStyles.Float,CultureInfo.InvariantCulture,out value) && value>=0 && value<=1){anchor=value;Align();}
-                return;
-            }
             if(command.StartsWith("open-note|",StringComparison.Ordinal)){
                 string id=command.Substring(10);
                 if(id.Length>0 && id.Length<200)openNote(id);
                 return;
             }
             var parts=command.Split('|');
-            if(parts.Length!=11 || parts[0]!="dock-size")return;
-            int[] n=new int[10];
-            for(int i=0;i<n.Length;i++)if(!int.TryParse(parts[i+1],out n[i]) || n[i]<0 || n[i]>2048)return;
-            width=Math.Min(400,Math.Max(30,n[0]));height=Math.Min(620,Math.Max(32,n[1]));
-            tabs=Rectangle.FromLTRB(n[2],n[3],n[4],n[5]);panel=Rectangle.FromLTRB(n[6],n[7],n[8],n[9]);Align();
+            int nextWidth;
+            if(parts.Length<2 || parts[0]!="dock-regions" || !int.TryParse(parts[1],out nextWidth) ||
+                nextWidth<28 || nextWidth>400)return;
+            var next=new List<Rectangle>();
+            for(int i=2;i<parts.Length;i++){
+                string[] edge=parts[i].Split(',');
+                int l,t,r,b;
+                if(edge.Length!=4 || !int.TryParse(edge[0],out l) || !int.TryParse(edge[1],out t) ||
+                    !int.TryParse(edge[2],out r) || !int.TryParse(edge[3],out b) ||
+                    l<0 || t<0 || r>nextWidth || b>65535 || r<=l || b<=t)return;
+                next.Add(Rectangle.FromLTRB(l,t,r,b));
+            }
+            width=nextWidth; bands.Clear(); bands.AddRange(next); Align();
         }
         public void End(){shuttingDown=true;Close();}
     }

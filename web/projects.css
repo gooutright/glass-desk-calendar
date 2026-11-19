@@ -26,33 +26,57 @@
 .dock-page, .dock-page body { margin: 0; background: transparent; overflow: hidden; }
 .dock-page * { box-sizing: border-box; }
 .dock-page body::before { display: none; }
-#project-dock { --folder-width: 34px; --dock-limit: min(76dvh,600px); position: fixed; z-index: 7; inset: 50% 0 auto auto; transform: translateY(-50%); display: flex; align-items: center; max-width: 100vw; color: #1e3748; font: 13px/1.35 "Segoe UI Variable Text","Microsoft YaHei UI",sans-serif; }
-.native #project-dock { display: none; }
-html:not(.dock-page) #project-dock { transform: none; }
-#project-dock [hidden] { display: none !important; }
-.dock-page #project-dock { width: max-content; max-width: none; }
-#project-tabs { display: flex; flex: 0 0 var(--folder-width); width: var(--folder-width); flex-direction: column; gap: 3px; padding: 2px 0; max-height: var(--dock-limit); overflow: hidden auto; scrollbar-width: none; overscroll-behavior: contain; }
-#project-dock button { font: inherit; cursor: pointer; border: none; }
-.dock-tab {
-  --folder-edge: color-mix(in srgb,var(--project-color) 65%,#5b6a73);
-  --folder-fill: color-mix(in srgb,var(--project-color) 17%,#f5f8fa);
-  --folder-outline: polygon(100% 0,100% 100%,11px 100%,8px calc(100% - 1px),6px calc(100% - 4px),6px 29px,5px 26px,1px 22px,0 19px,0 6px,1px 3px,4px 1px,7px 0);
-  box-sizing: border-box; position: relative; isolation: isolate; display: flex; flex: none;
-  flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  width: 100%; min-height: 65px; padding: 8px 3px 10px 7px;
-  color: #203542; background: transparent; touch-action: none; user-select: none;
+#project-dock {
+  --folder-width: 43px; position: fixed; z-index: 7; inset: 0 0 0 auto;
+  width: var(--folder-width); pointer-events: none; color: #392c17;
+  font: 13px/1.35 "Segoe UI Variable Text","Microsoft YaHei UI",sans-serif;
 }
-.dock-tab::before,.dock-tab::after { content: ""; position: absolute; clip-path: var(--folder-outline); pointer-events: none; }
-.dock-tab::before { z-index: -2; inset: 0; background: var(--folder-edge); }
-.dock-tab::after { z-index: -1; inset: 1px 2px 1px 1px; background: linear-gradient(95deg,color-mix(in srgb,var(--project-color) 35%,white),var(--folder-fill) 37%); }
-.dock-tab:hover,.dock-tab[aria-expanded=true] { --folder-fill: color-mix(in srgb,var(--project-color) 34%,#f7fafb); }
-.dock-tab[aria-expanded=true]::after { right: 4px; }
+#project-dock[data-expanded="true"] { width: min(100vw,calc(288px + var(--folder-width))); }
+.dock-page #project-dock[data-expanded="true"] { width: calc(288px + var(--folder-width)); }
+.native #project-dock, #project-dock [hidden] { display: none !important; }
+#project-tabs {
+  position: absolute; inset: 0 0 0 auto; width: var(--folder-width);
+  overflow: hidden auto; scrollbar-width: none; overscroll-behavior: contain; pointer-events: none;
+}
+#project-tabs::before { content: ""; display: block; width: 1px; height: var(--track-height,100%); }
+#project-dock button { font: inherit; cursor: pointer; border: none; }
+#project-dock .dock-tab {
+  --folder-top: 1px; position: absolute; right: 0; width: 100%;
+  display: flex; justify-content: center; align-items: center; min-height: 74px; padding: 11px 4px 11px 12px;
+  color: var(--project-mark,#2e2619); background: transparent; isolation: isolate;
+  pointer-events: auto; user-select: none; touch-action: none;
+}
+.dock-tab { --tab-color: var(--project-color); }
+.dock-tab::before,.dock-tab::after { content: ""; position: absolute; pointer-events: none; }
+.dock-tab::before {
+  z-index: -3; inset: var(--folder-top) 0 0 10px; border-radius: 5px 0 0 5px;
+  background: color-mix(in srgb,var(--tab-color) 76%,#362911);
+}
+.folder-lip {
+  position: absolute; top: var(--folder-top); left: 2px; width: 26px; height: 37px; z-index: -2;
+  pointer-events: none; filter: drop-shadow(1px 2px 1.3px rgb(35 28 19 / .43));
+}
+.folder-lip::before {
+  content: ""; position: absolute; inset: 0;
+  clip-path: polygon(6px 0,100% 0,100% 100%,12px 100%,10px 33px,2px 26px,0 23px,0 6px,1px 3px,3px 1px);
+  background: linear-gradient(160deg,color-mix(in srgb,var(--tab-color) 85%,white),var(--tab-color) 42%,color-mix(in srgb,var(--tab-color) 76%,#372716));
+}
+.dock-tab::after {
+  z-index: -1; inset: var(--folder-top) 0 1px 11px; border-radius: 5px 0 0 5px;
+  border: 1px solid color-mix(in srgb,var(--tab-color) 86%,#392d1a); border-right: 0;
+  background: linear-gradient(96deg,var(--tab-color),color-mix(in srgb,var(--tab-color) 86%,white) 18%,color-mix(in srgb,var(--tab-color) 93%,white) 75%,var(--tab-color));
+  box-shadow: inset 1px 0 0 rgb(255 255 255 / .32), inset 0 1px 0 rgb(255 255 255 / .38);
+}
+#project-dock .dock-tab.dragging { z-index: 2; cursor: grabbing; }
+.dock-tab:hover::after,.dock-tab[aria-expanded=true]::after { filter: brightness(1.05); }
 .dock-tab:focus-visible { outline: none; }
-.dock-tab:focus-visible::before { background: #183c54; }
-.dock-tab:focus-visible::after { inset: 2px 3px 2px 2px; }
-.folder-name { writing-mode: vertical-rl; text-orientation: mixed; max-inline-size: 82px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 1.1; font-weight: 600; letter-spacing: .04em; }
-.dock-panel { width:min(288px,calc(100vw - var(--folder-width))); padding:12px; max-height:var(--dock-limit); display:flex; flex-direction:column; border-radius:13px 4px 4px 13px; border-inline-end:3px solid color-mix(in srgb,var(--project-color) 58%,#dce7eb); }
-.dock-page .dock-panel { width:288px; }
+.dock-tab:focus-visible::after { outline: 2px solid #604617; outline-offset: -3px; }
+.folder-name { writing-mode: vertical-rl; text-orientation: mixed; max-inline-size: 88px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 1.15; font-weight: 600; letter-spacing: .04em; }
+.dock-panel {
+  position: absolute; right: var(--folder-width); width: calc(100% - var(--folder-width));
+  max-height: min(600px,100%); padding: 12px; display: flex; flex-direction: column; pointer-events: auto;
+  border-radius: 13px 4px 4px 13px; border-inline-end: 3px solid color-mix(in srgb,var(--project-color) 58%,#dce7eb);
+}
 .dock-panel header { font-size:14px; padding-bottom:7px; border-bottom:1px solid #c4d3da; }
 .dock-panel header strong { overflow-wrap:anywhere; }
 .dock-panel header button { margin-left:auto; color:#284253; background:transparent; padding:2px 6px; }

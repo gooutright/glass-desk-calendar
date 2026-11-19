@@ -147,7 +147,7 @@ namespace GlassDeskCalendar
         }
         public void BeginDrag(string edge)
         {
-            if (Array.IndexOf(new[]{"move","rail","n","s","e","w","ne","nw","se","sw"},edge)<0) return;
+            if (Array.IndexOf(new[]{"move","n","s","e","w","ne","nw","se","sw"},edge)<0) return;
             if (GetAsyncKeyState(1)>=0) return;
             if (edge=="move") {
                 // Let the compositor move an ordinary window at the display cadence.
@@ -155,7 +155,7 @@ namespace GlassDeskCalendar
                 SendMessage(window,0x0112,new IntPtr(0xF012),IntPtr.Zero); // WM_SYSCOMMAND, SC_MOVE | HTCAPTION
                 Place(Bounds); save(); return;
             }
-            GetCursorPos(out dragOrigin); initial = Bounds; handle = edge; draggingRail=false;
+            GetCursorPos(out dragOrigin); initial = Bounds; handle = edge;
             dragging.Start();
         }
         void DragTick(object sender,EventArgs e)
@@ -163,35 +163,16 @@ namespace GlassDeskCalendar
             Point p; GetCursorPos(out p);
             int x=p.X-dragOrigin.X, y=p.Y-dragOrigin.Y;
             Rectangle rect=initial;
-            if (handle=="move") rect.Offset(x,y);
-            else if (handle=="rail") {
-                if (!draggingRail && Math.Abs(y)>=5*Scale) draggingRail=true;
-                if (!draggingRail) {
-                    // A normal click may already have expanded the rail. Do not restore
-                    // the folded rectangle on button-up.
-                    if (GetAsyncKeyState(1)>=0) dragging.Stop();
-                    return;
-                }
-                Rectangle work=Screen.FromRectangle(initial).WorkingArea;
-                rect.Y=Math.Max(work.Top, Math.Min(work.Bottom-initial.Height,initial.Top+y));
-            }
-            else {
-                int left=initial.Left, top=initial.Top, right=initial.Right, bottom=initial.Bottom;
-                int minW=(int)Math.Ceiling(minimumWidth*Scale), minH=(int)Math.Ceiling(minimumHeight*Scale);
-                if (handle.Contains("w")) left=Math.Min(right-minW,left+x);
-                if (handle.Contains("e")) right=Math.Max(left+minW,right+x);
-                if (handle.Contains("n")) top=Math.Min(bottom-minH,top+y);
-                if (handle.Contains("s")) bottom=Math.Max(top+minH,bottom+y);
-                rect = Rectangle.FromLTRB(left,top,right,bottom);
-            }
+            int left=initial.Left, top=initial.Top, right=initial.Right, bottom=initial.Bottom;
+            int minW=(int)Math.Ceiling(minimumWidth*Scale), minH=(int)Math.Ceiling(minimumHeight*Scale);
+            if (handle.Contains("w")) left=Math.Min(right-minW,left+x);
+            if (handle.Contains("e")) right=Math.Max(left+minW,right+x);
+            if (handle.Contains("n")) top=Math.Min(bottom-minH,top+y);
+            if (handle.Contains("s")) bottom=Math.Max(top+minH,bottom+y);
+            rect = Rectangle.FromLTRB(left,top,right,bottom);
             Place(rect);
-            if (GetAsyncKeyState(1)>=0) {
-                dragging.Stop();
-                if (handle!="rail" || draggingRail) save();
-                draggingRail=false;
-            }
+            if (GetAsyncKeyState(1)>=0) { dragging.Stop(); save(); }
         }
-        bool draggingRail;
         public void Stop() { dragging.Stop(); StopDesktopTracking(); }
     }
 }

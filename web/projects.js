@@ -5,7 +5,6 @@
   const recordsKey = "desktop-calendar-sketch.records.v1";
   const languageKey = "desktop-calendar-sketch.language.v1";
   const sizeKey = "desktop-calendar-sketch.size.v1";
-  const dockAnchorKey = "desktop-calendar.dock-position.v1";
   const palette = ["#4a799a","#368575","#bd8050","#b56677","#8174a6"];
   const nativeDock = document.documentElement.classList.contains("dock-page");
   const useNative = location.hostname === "calendar.example" && !!window.chrome?.webview;
@@ -22,7 +21,7 @@
   }
   function lang() { return nativeDock ? (stored(languageKey) || "zh-CN") : document.documentElement.lang; }
   function find(id) {
-    return catalog().find(p=>p.id===id) || {id:"",name:ui("未分类","Unassigned"),color:"#74818b"};
+    return catalog().find(p=>p.id===id) || {id:"",name:ui("未分类","Unassigned"),color:"#f0b22b"};
   }
   function active() { return find(stored(selectedKey)).id; }
   function paint(node, project) {
@@ -43,44 +42,8 @@
     return node;
   }
   function button(cls,text) { const node=make("button",cls,text); node.type="button"; return node; }
-  let editorId="", openGroup=null, listRecords=()=>readList(recordsKey), openNote=null, frame=0, dockSize="";
-  let anchor=Number(stored(dockAnchorKey) ?? .5);
-  if (!Number.isFinite(anchor) || anchor<0 || anchor>1) anchor=.5;
-  let tabDrag=null, movedTab=false, closedTabs="";
-  function positionRail() {
-    if (useNative) return;
-    const rail=get("project-dock");
-    if (rail) rail.style.top=Math.round(anchor*Math.max(0,innerHeight-rail.offsetHeight))+"px";
-  }
-  function saveAnchor(value) {
-    anchor=Math.max(0,Math.min(1,value));
-    try { localStorage.setItem(dockAnchorKey,String(anchor)); } catch {}
-  }
-  function bindDrag(tabs) {
-    tabs.addEventListener("pointerdown",e=>{
-      if (!e.isPrimary || e.button!==0 || !e.target.closest(".dock-tab")) return;
-      movedTab=false;
-      tabDrag={id:e.pointerId,y:e.screenY,top:get("project-dock").offsetTop};
-      e.target.closest(".dock-tab").setPointerCapture(e.pointerId);
-      if (nativeDock) host.postMessage("dock-drag");
-    });
-    function track(e) {
-      if (!tabDrag || tabDrag.id!==e.pointerId) return;
-      const dy=e.screenY-tabDrag.y;
-      if (Math.abs(dy)>=5) movedTab=true;
-      if (movedTab && !nativeDock) {
-        const travel=Math.max(1,innerHeight-get("project-dock").offsetHeight);
-        anchor=Math.max(0,Math.min(1,(tabDrag.top+dy)/travel)); positionRail();
-      }
-    }
-    tabs.addEventListener("pointermove",track);
-    tabs.addEventListener("pointerup",e=>{track(e); if(movedTab && !nativeDock) saveAnchor(anchor);});
-    tabs.addEventListener("lostpointercapture",()=>{tabDrag=null;});
-    tabs.addEventListener("click",e=>{
-      if (movedTab && e.detail) {e.preventDefault(); e.stopPropagation();}
-      movedTab=false;
-    },true);
-  }
+  let editorId="", openGroup=null, listRecords=()=>readList(recordsKey), openNote=null, frame=0;
+  let folders=null, deferred=false, closedTabs="";
   function selectOptions(select,id) {
     select.replaceChildren(...[find(""),...catalog()].map(p=>new Option(p.name,p.id)));
     select.value=find(id).id;
@@ -165,6 +128,7 @@
   function dock() {
     const aside=get("project-dock");
     if (!aside || (useNative && !nativeDock)) return;
+    if (folders?.dragging()) {deferred=true;return;}
     const records=listRecords().filter(r=>r && typeof r.id==="string" && typeof r.date==="string");
     const projects=catalog(), ids=new Set(projects.map(p=>p.id)), unassigned=find("");
     const all=projects.slice();
@@ -175,7 +139,9 @@
       tabs=make("div");tabs.id="project-tabs";
       panel=make("section","dock-panel"); panel.id="project-panel";
       aside.append(panel,tabs);
-      bindDrag(tabs);
+      folders=CalendarFolders.mount(aside,tabs,panel,nativeDock ? host : null,()=>{
+        if(deferred){deferred=false;schedule();}
+      });
     }
     const signature=JSON.stringify([lang(),all]);
     if (openGroup===null && closedTabs===signature) return;
@@ -191,12 +157,14 @@
       tab.setAttribute("aria-expanded",String(openGroup===p.id));
       tab.setAttribute("aria-controls","project-panel");
       paint(tab,p);
-      tab.append(make("span","folder-name",p.name));
+      const lip=make("span","folder-lip");
+      lip.setAttribute("aria-hidden","true");
+      tab.append(lip,make("span","folder-name",p.name));
       tab.onclick=()=>{openGroup=openGroup===p.id ? null : p.id;dock();};
       return tab;
     }));
-    tabs.scrollTop=tabScroll;
     panel.hidden=openGroup===null;
+    aside.dataset.expanded=String(!panel.hidden);
     if(!panel.hidden) {
       const p=find(openGroup);
       const entries=records.filter(r=>(ids.has(r.projectId)?r.projectId:"")===p.id).sort((a,b)=>a.date.localeCompare(b.date));
@@ -218,21 +186,7 @@
     }
     if(rowFocus) [...panel.querySelectorAll(".dock-item")].find(b=>b.dataset.openNote===rowFocus)?.focus({preventScroll:true});
     else if(tabFocus!==undefined) [...tabs.children].find(b=>b.dataset.projectTab===tabFocus)?.focus({preventScroll:true});
-    if(nativeDock) sizeDesktopDock(); else positionRail();
-  }
-  function sizeDesktopDock() {
-    const aside=get("project-dock");
-    if(!aside.firstElementChild) return;
-    // Measure the folder labels at their natural size, independent of the current native window.
-    aside.style.setProperty("--dock-limit",Math.max(32,Math.min(600,screen.availHeight-12))+"px");
-    const bounds=aside.getBoundingClientRect();
-    const band=node=>{
-      const rect=node.getBoundingClientRect();
-      return node.hidden ? [0,0,0,0] : [Math.floor(rect.left-bounds.left),Math.floor(rect.top-bounds.top),
-        Math.ceil(rect.right-bounds.left),Math.ceil(rect.bottom-bounds.top)];
-    };
-    const size=["dock-size",Math.ceil(bounds.width),Math.ceil(bounds.height),...band(get("project-tabs")),...band(get("project-panel"))].join("|");
-    if(size!==dockSize) {dockSize=size;host.postMessage(size);}
+    folders.layout(tabScroll);
   }
   function schedule() { if(!frame) frame=requestAnimationFrame(()=>{frame=0;dock();}); }
   function syncDockFont() {
@@ -242,7 +196,7 @@
       Number.isFinite(size) && size>=11 && size<=32 ? size+"px" : "");
   }
   window.addEventListener("storage",event=>{
-    if(nativeDock && (event.key===sizeKey || event.key===null)) {syncDockFont();sizeDesktopDock();}
+    if(nativeDock && (event.key===sizeKey || event.key===null)) {syncDockFont();folders?.layout();}
     if(![key,recordsKey,selectedKey,languageKey,null].includes(event.key)) return;
     if(nativeDock) document.documentElement.lang=lang();
     else if(event.key!==recordsKey){toolbar();updateDots();}
@@ -256,24 +210,15 @@
     const tab=e.target.closest(".dock-tab");
     if(!tab || !["ArrowUp","ArrowDown","Home","End"].includes(e.key)) return;
     e.preventDefault();
-    const row=tab.parentElement;
-    const next={ArrowUp:tab.previousElementSibling,ArrowDown:tab.nextElementSibling,Home:row.firstElementChild,End:row.lastElementChild};
+    const ordered=folders.ordered(),index=ordered.indexOf(tab);
+    const next={ArrowUp:ordered[index-1],ArrowDown:ordered[index+1],Home:ordered[0],End:ordered.at(-1)};
     next[e.key]?.focus();
   });
   window.CalendarProjects=Object.freeze({find,active,tagRow,selectOptions,refresh:schedule,langChanged(){toolbar();schedule();},
     mount(records,open){listRecords=records;openNote=open;bindToolbar();dock();}});
   if(nativeDock) {
     syncDockFont();
-    host.postMessage("dock-anchor|"+anchor);
     document.documentElement.lang=lang();dock();
-    window.addEventListener("resize",sizeDesktopDock);
-    host.addEventListener("message",e=>{
-      if(e.data==="collapse"){openGroup=null;dock();}
-      else if(typeof e.data==="string" && e.data.startsWith("dock-anchor|")) {
-        const value=Number(e.data.slice(12));
-        if(Number.isFinite(value)) saveAnchor(value);
-      }
-    });
+    host.addEventListener("message",e=>{if(e.data==="collapse"){openGroup=null;dock();}});
   }
-  if(!useNative) window.addEventListener("resize",positionRail);
 })();

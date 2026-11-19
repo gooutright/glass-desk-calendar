@@ -8,7 +8,7 @@ import tkinter as tk
 from playwright.sync_api import sync_playwright
 from desktop_smoke import (EXE, USER32, belongs, calendar_handle, note_editor, quit_app,
                            start, wait_closed, wait_for, window_string, windows)
-from project_notes_smoke import dock_window, rect
+from project_notes_smoke import create_project, dock_window, rect
 
 USER32.WindowFromPoint.argtypes=[wintypes.POINT]
 USER32.WindowFromPoint.restype=wintypes.HWND
@@ -27,13 +27,15 @@ def hits(hwnd,x,y):
     return hit==hwnd or USER32.IsChild(hwnd,hit)
 
 
-def gesture(hwnd,x,y,dx=0,dy=0):
+def gesture(hwnd,x,y,dx=0,dy=0,pump=None):
     assert hits(hwnd,x,y), "The intended window must own the click before sending input"
     USER32.SetCursorPos(x,y)
     time.sleep(.08)
+    if pump:pump()
     USER32.mouse_event(2,0,0,0,0)
     try:
         time.sleep(.12)
+        if pump:pump()
         if dx or dy:
             for step in range(1,19):
                 USER32.SetCursorPos(x+round(dx*step/18),y+round(dy*step/18))
@@ -41,6 +43,15 @@ def gesture(hwnd,x,y,dx=0,dy=0):
     finally:
         USER32.mouse_event(4,0,0,0,0)
     time.sleep(.18)
+    if pump:pump()
+
+
+def tab_center(dock,rail,tab):
+    item=tab.bounding_box()
+    box=rect(rail)
+    scale=dock.evaluate("devicePixelRatio")
+    return (round(box.left+(item["x"]+item["width"]*.65)*scale),
+            round(box.top+(item["y"]+item["height"]*.5)*scale))
 
 
 def concurrent_edits(main):
@@ -116,9 +127,11 @@ def test_windows(profile,pw):
         moved=rect(note_hwnd)
         assert moved.right<frame.left and abs(moved.left-destination)<12, (start_box.left,moved.left,destination)
         # A genuine button press in a different process' window through the rounded corner.
-        gesture(helper_hwnd,*corners[0])
-        helper.update()
-        assert clicks and USER32.IsWindowEnabled(helper_hwnd)
+        gesture(helper_hwnd,*corners[0],pump=helper.update)
+        def received_click():
+            helper.update()
+            return clicks and USER32.IsWindowEnabled(helper_hwnd)
+        wait_for(received_click,4)
         main.locator("#next").click()
         assert editor.locator("#note-body").inner_text()=="This is an unsaved draft."
         editor.locator("#note-save").click()
@@ -133,7 +146,10 @@ def test_windows(profile,pw):
             main.wait_for_timeout(50)
             return next((page for page in main.context.pages if page.url.endswith("/dock.html")),None)
         dock=wait_for(get_rail)
-        tab=dock.locator(".dock-tab").first
+        create_project(main,"Stationary folder","#368575")
+        other=dock.get_by_role("button",name="Stationary folder",exact=True)
+        tab=dock.locator('.dock-tab[data-project-tab=""]')
+        other.wait_for()
         tab.wait_for()
         dock.evaluate("""()=>{
           window.railEvents=[];
@@ -141,13 +157,26 @@ def test_windows(profile,pw):
             document.addEventListener(type,e=>railEvents.push([type,e.screenY,e.clientY,e.target.className]),true);
         }""")
         lift(rail)
-        r=rect(rail)
-        gesture(rail,r.right-10,(r.top+r.bottom)//2,0,-125)
-        after=rect(rail)
-        assert after.right==r.right and abs(r.top-after.top-125)<10, (r.top,after.top)
+        # The installed calendar may have its own tab at precisely this coordinate.
+        # Put the disposable rail above it for the physical drag.
+        USER32.SetWindowPos(rail,-1,0,0,0,0,0x13)
+        wait_for(lambda:hits(rail,*tab_center(dock,rail,tab)))
+        initial=tab_center(dock,rail,tab)
+        stationary=tab_center(dock,rail,other)
+        gesture(rail,*initial,0,-125)
+        after=tab_center(dock,rail,tab)
+        assert abs(after[0]-initial[0])<2 and abs(initial[1]-after[1]-125)<10, (initial,after)
+        assert tab_center(dock,rail,other)==stationary, "Dragging one project must leave the other at its original screen coordinate"
+        assert not hits(rail,initial[0],initial[1]), "The vacated gap must allow desktop clicks"
+        assert tab.evaluate("""t=>{
+          const lip=t.querySelector('.folder-lip');
+          return getComputedStyle(t,'::before').top===getComputedStyle(t,'::after').top &&
+              getComputedStyle(lip).top===getComputedStyle(t,'::after').top &&
+              getComputedStyle(lip).filter.includes('drop-shadow');
+        }"""), "The two folder faces share a top edge and the projecting lip casts a local shadow"
         assert tab.get_attribute("aria-expanded")=="false"
         assert tab.locator("i,svg,img").count()==0
-        gesture(rail,after.right-10,(after.top+after.bottom)//2)
+        gesture(rail,*after)
         try:
             dock.locator("#project-panel").wait_for(timeout=3500)
         except Exception:
@@ -156,8 +185,13 @@ def test_windows(profile,pw):
             raise
         tab.click()
         dock.locator("#project-panel").wait_for(state="hidden")
+        wait_for(lambda:rect(rail).right-rect(rail).left<85 and hits(rail,*stationary),5)
         print("PASS four corners pass physical clicks; unowned note drags outside calendar; another process receives click; navigating and saving keep draft; rail drags without opening.")
-        return after.top
+        gesture(rail,*stationary,0,95)
+        assert tab_center(dock,rail,tab)==after
+        moved_other=tab_center(dock,rail,other)
+        assert abs(moved_other[1]-stationary[1]-95)<10
+        return after,moved_other
     finally:
         if helper: helper.destroy()
         quit_app(process,main)
@@ -170,12 +204,20 @@ def run():
     try:
         with tempfile.TemporaryDirectory(dir=EXE.parents[1],prefix="floating-test-",ignore_cleanup_errors=True) as tmp, sync_playwright() as pw:
             profile=Path(tmp)
-            top=test_windows(profile,pw)
+            first,second=test_windows(profile,pw)
             process,main=start(pw.chromium,profile)
             try:
                 rail=wait_for(lambda:dock_window(process))
-                wait_for(lambda:abs(rect(rail).top-top)<3)
-                print("PASS right-edge position survives a full application restart.")
+                main.wait_for_function("document.readyState==='complete'")
+                def restored():
+                    main.wait_for_timeout(50)
+                    dock=next((p for p in main.context.pages if p.url.endswith("/dock.html")),None)
+                    if not dock:return False
+                    a=dock.locator('.dock-tab[data-project-tab=""]')
+                    b=dock.get_by_role("button",name="Stationary folder",exact=True)
+                    return a.is_visible() and b.is_visible() and tab_center(dock,rail,a)==first and tab_center(dock,rail,b)==second
+                wait_for(restored)
+                print("PASS both independent folder positions survive a full application restart.")
             finally:
                 quit_app(process,main)
     finally:
