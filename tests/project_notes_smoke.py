@@ -52,6 +52,8 @@ def run():
               CalendarActions.add('2026-10-02','Old unassigned note','')]""",[a,b])
             tab=dock.locator(".dock-tab[aria-label=Research]")
             tab.wait_for()
+            assert dock.locator("#project-tabs[title], #project-tabs [title]").count()==0, \
+                "Hovering the project folders must not trigger a second label from the browser"
             assert tab.inner_text()=="Research", "A folded folder must show its project name"
             assert tab.locator("i,svg,img").count()==0, "Folded project tabs are text only"
             assert tab.evaluate("""b=>{

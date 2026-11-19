@@ -152,7 +152,6 @@
     tabs.replaceChildren(...all.map(p=>{
       const tab=button("dock-tab");
       tab.dataset.projectTab=p.id;
-      tab.title=p.name;
       tab.setAttribute("aria-label",p.name);
       tab.setAttribute("aria-expanded",String(openGroup===p.id));
       tab.setAttribute("aria-controls","project-panel");

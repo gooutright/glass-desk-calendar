@@ -10,8 +10,8 @@
 
 在 [Releases](https://github.com/gooutright/glass-desk-calendar/releases/latest) 下载 Windows x64 版本。
 
-- **安装版**　双击 `GlassDeskCalendar-1.3.2-win-x64.msi`。安装完成后，双击桌面的「桌面月历」，也可以从开始菜单打开 Glass Desk Calendar。
-- **便携版**　解压 `GlassDeskCalendar-1.3.2-win-x64-portable.zip`，双击其中的 `GlassDeskCalendar.exe`。程序和同一文件夹里的组件需要放在一起。
+- **安装版**　双击 `GlassDeskCalendar-1.3.3-win-x64.msi`。安装完成后，双击桌面的「桌面月历」，也可以从开始菜单打开 Glass Desk Calendar。
+- **便携版**　解压 `GlassDeskCalendar-1.3.3-win-x64-portable.zip`，双击其中的 `GlassDeskCalendar.exe`。程序和同一文件夹里的组件需要放在一起。
 
 适用于 Windows 10 22H2 和 Windows 11 的 x64 系统。程序使用 .NET Framework 4.8 和 Microsoft Edge WebView2 Runtime。在 Windows 11 上使用系统已有的运行组件。在缺少 WebView2 的电脑上，请安装微软的 [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
 

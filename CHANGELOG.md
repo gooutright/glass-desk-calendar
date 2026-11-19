@@ -1,5 +1,11 @@
 # 版本修改记录
 
+## v1.3.3
+
+- 移除鼠标悬停在桌面右侧项目文件夹上时弹出的白色名称框。单击文件夹展开列表，可在顶部查看完整项目名称。
+
+[发布说明与下载](https://github.com/gooutright/glass-desk-calendar/releases/tag/v1.3.3) · [比较 v1.3.2 与 v1.3.3](https://github.com/gooutright/glass-desk-calendar/compare/v1.3.2...v1.3.3)
+
 ## v1.3.2
 
 - **右侧文件夹可以点开了。** 浮动模式下，把月历拖到屏幕右边缘并点击月历后，仍能单击文件夹展开项目，再点一条便签打开笔记。
