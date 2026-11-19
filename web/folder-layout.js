@@ -54,7 +54,7 @@
     function layout(scroll=tabs.scrollTop) {
       if(drag)return;
       const height=tabs.clientHeight,items=rows().map(tab=>({tab,height:tab.offsetHeight,id:tab.dataset.projectTab}));
-      if(!height || !items.length)return;
+      if(!height || !items.length){geometry();return;}
       const sum=items.reduce((n,item)=>n+item.height+gap,-gap);
       total=Math.max(height,sum);
       let cursor=Math.round(Math.max(0,height-sum)*anchor);

@@ -5,6 +5,7 @@
   const recordsKey = "desktop-calendar-sketch.records.v1";
   const languageKey = "desktop-calendar-sketch.language.v1";
   const sizeKey = "desktop-calendar-sketch.size.v1";
+  const dockHiddenKey = "desktop-calendar.dock-hidden.v1";
   const palette = ["#4a799a","#368575","#bd8050","#b56677","#8174a6"];
   const nativeDock = document.documentElement.classList.contains("dock-page");
   const useNative = location.hostname === "calendar.example" && !!window.chrome?.webview;
@@ -24,6 +25,7 @@
     return catalog().find(p=>p.id===id) || {id:"",name:ui("未分类","Unassigned"),color:"#f0b22b"};
   }
   function active() { return find(stored(selectedKey)).id; }
+  function dockHidden() { return stored(dockHiddenKey)==="1"; }
   function paint(node, project) {
     const rgb=[1,3,5].map(i=>parseInt(project.color.slice(i,i+2),16)/255).map(v=>v<=.04045 ? v/12.92 : ((v+.055)/1.055)**2.4);
     node.style.setProperty("--project-color",project.color);
@@ -67,6 +69,10 @@
       b.onclick=()=>{get("project-color").value=color;swatches();}; return b;
     }));
   }
+  function updateDockToggle() {
+    get("project-dock-toggle").textContent=dockHidden()
+      ? ui("显示侧边便签","Show side notes") : ui("隐藏侧边便签","Hide side notes");
+  }
   function toolbar() {
     if (!get("project-toggle")) return;
     const choice=find(active()), toggle=get("project-toggle");
@@ -77,6 +83,7 @@
     get("project-name-label").textContent=ui("名称","Name");
     get("project-color-label").textContent=ui("颜色","Color");
     get("project-color").setAttribute("aria-label",ui("自定义颜色","Custom color"));
+    updateDockToggle();
     get("project-options").replaceChildren(...[find(""),...catalog()].map(p=>{
       const b=button("project-option");paint(b,p);b.dataset.project=p.id;b.setAttribute("aria-pressed",String(p.id===choice.id));
       b.append(make("i","project-dot"),make("span","",p.name));
@@ -104,6 +111,11 @@
     const toggle=get("project-toggle"), picker=get("project-picker");
     toggle.onclick=()=>showPicker(picker.hidden);
     get("project-new").onclick=()=>{setEditor("");get("project-name").focus();};
+    get("project-dock-toggle").onclick=()=>{
+      try {localStorage.setItem(dockHiddenKey,dockHidden() ? "0" : "1");}
+      catch {return showError(ui("侧边便签设置未能保存","Could not save side note visibility"));}
+      updateDockToggle();dock();
+    };
     get("project-color").oninput=swatches;
     get("project-form").onsubmit=event=>{
       event.preventDefault();
@@ -130,9 +142,9 @@
     if (!aside || (useNative && !nativeDock)) return;
     if (folders?.dragging()) {deferred=true;return;}
     const records=listRecords().filter(r=>r && typeof r.id==="string" && typeof r.date==="string");
-    const projects=catalog(), ids=new Set(projects.map(p=>p.id)), unassigned=find("");
-    const all=projects.slice();
-    if(!all.length || records.some(r=>!ids.has(r.projectId))) all.unshift(unassigned);
+    const projects=catalog(), ids=new Set(projects.map(p=>p.id)), hidden=dockHidden();
+    const all=hidden ? [] : projects.slice();
+    if(!hidden && (!all.length || records.some(r=>!ids.has(r.projectId)))) all.unshift(find(""));
     if(openGroup!==null&&!all.some(p=>p.id===openGroup)) openGroup=null;
     let tabs=get("project-tabs"),panel=get("project-panel");
     if(!tabs) {
@@ -196,10 +208,12 @@
   }
   window.addEventListener("storage",event=>{
     if(nativeDock && (event.key===sizeKey || event.key===null)) {syncDockFont();folders?.layout();}
-    if(![key,recordsKey,selectedKey,languageKey,null].includes(event.key)) return;
+    if(![key,recordsKey,selectedKey,languageKey,dockHiddenKey,null].includes(event.key)) return;
     if(nativeDock) document.documentElement.lang=lang();
+    else if(event.key===dockHiddenKey) updateDockToggle();
     else if(event.key!==recordsKey){toolbar();updateDots();}
-    schedule();
+    // Restore immediately even when the empty native window is not painting frames.
+    if(event.key===dockHiddenKey || event.key===null) dock();else schedule();
   });
   document.addEventListener("keydown",e=>{
     if(e.key==="Escape"&&openGroup!==null){

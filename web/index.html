@@ -39,7 +39,11 @@
               <form id="project-form">
                 <label><span id="project-name-label"></span><input id="project-name" maxlength="40" required autocomplete="off"></label>
                 <div class="palette-row"><span id="project-color-label"></span><div id="project-palette"></div><input id="project-color" type="color" value="#4a799a"></div>
-                <p id="project-error" role="status" hidden></p><button id="project-save" type="submit"></button>
+                <p id="project-error" role="status" hidden></p>
+                <div class="project-picker-actions">
+                  <button id="project-dock-toggle" type="button"></button>
+                  <button id="project-save" type="submit"></button>
+                </div>
               </form>
             </section>
           </div>
