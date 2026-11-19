@@ -16,8 +16,8 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("Glass Desk Calendar")]
 [assembly: AssemblyProduct("Glass Desk Calendar")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]
 
 namespace GlassDeskCalendar
 {
@@ -122,7 +122,7 @@ namespace GlassDeskCalendar
         void SaveState()
         {
             if (position==null) return;
-            Rectangle r=position.Bounds;
+            Rectangle r=position.RestoredBounds;
             if(dock!=null&&!closing)dock.Align();
             string data=String.Format(CultureInfo.InvariantCulture,"{0},{1},{2},{3},{4}",r.X,r.Y,r.Width,r.Height,wantedPin ? 1 : 0);
             try {
@@ -149,8 +149,17 @@ namespace GlassDeskCalendar
         {
             if (position==null) return;
             bool ok=position.Pin(pin); wantedPin=position.Pinned;
+            UpdateDockLayer();
             TrayText(); SaveState(); SendState();
             if (!ok) tray.ShowBalloonTip(3500,tray.Text,english ? "The Windows desktop is unavailable. Calendar is open as a window." : "暂时无法连接 Windows 桌面，月历已用窗口模式打开。",Forms.ToolTipIcon.Info);
+        }
+        void UpdateDockLayer()
+        {
+            if (dock==null) return;
+            // A floating folder follows its calendar. An independent pinned folder
+            // must remain available even when Windows minimizes the calendar.
+            dock.Owner=position.Pinned ? null : this;
+            dock.Topmost=position.Pinned;
         }
         void SendState()
         {
@@ -191,10 +200,11 @@ namespace GlassDeskCalendar
                 };
                 SetPinned(wantedPin);
                 core.Navigate(Address);
-                dock=new ProjectDockWindow(env,delegate{return position.Bounds;},delegate{return position.Pinned;},delegate(string id){
+                dock=new ProjectDockWindow(env,delegate{return position.RestoredBounds;},delegate(string id){
                     if(closing)return;
                     core.PostWebMessageAsString("open-note|"+id);
                 },Log);
+                UpdateDockLayer();
                 dock.Show();
             } catch (WebView2RuntimeNotFoundException ex) {
                 Log(ex);
@@ -216,7 +226,7 @@ namespace GlassDeskCalendar
             NoteWindow editor;
             if (notes.TryGetValue(id,out editor)) { editor.Raise(); return; }
             double scale=position.Scale;
-            Rectangle frame=position.Bounds;
+            Rectangle frame=position.RestoredBounds;
             var bounds=new Rectangle(frame.Left+(int)Math.Round(x*scale),frame.Top+(int)Math.Round(y*scale),
                 Math.Max(1,(int)Math.Round(w*scale)),Math.Max(1,(int)Math.Round(h*scale)));
             editor=new NoteWindow(environment,id,bounds,delegate {exitRequested=false;},Log);

@@ -43,7 +43,7 @@ foreach ($name in 'index.html','calendar.css','desktop.css','calendar.js','proje
 if ($AppOnly) { Write-Output (Join-Path $app 'GlassDeskCalendar.exe'); return }
 
 $wix = Expand-Tool 'wix314' 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip' '6AC824E1642D6F7277D0ED7EA09411A508F6116BA6FAE0AA5F2C7DAA2FF43D31' 'candle.exe'
-$name = 'GlassDeskCalendar-1.3.1-win-x64'
+$name = 'GlassDeskCalendar-1.3.2-win-x64'
 $object = Join-Path $build 'installer.wixobj'
 $installerManifest = Join-Path $root 'packaging/installer.wxs'
 & (Join-Path $wix 'candle.exe') -nologo -arch x64 "-dAppDir=$app" "-dIcon=$icon" -out $object $installerManifest

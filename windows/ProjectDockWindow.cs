@@ -17,7 +17,6 @@ namespace GlassDeskCalendar
         const string Address="https://calendar.example/dock.html";
         readonly WebView2CompositionControl view;
         readonly Func<Rectangle> calendarBounds;
-        readonly Func<bool> isPinned;
         readonly Action<string> openNote;
         readonly Action<Exception> report;
         DesktopPlacement placement;
@@ -29,9 +28,9 @@ namespace GlassDeskCalendar
         [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr hwnd,IntPtr region,bool redraw);
         bool shuttingDown;
 
-        public ProjectDockWindow(CoreWebView2Environment env,Func<Rectangle> bounds,Func<bool> pinned,Action<string> open,Action<Exception> log)
+        public ProjectDockWindow(CoreWebView2Environment env,Func<Rectangle> bounds,Action<string> open,Action<Exception> log)
         {
-            calendarBounds=bounds;isPinned=pinned;openNote=open;report=log;
+            calendarBounds=bounds;openNote=open;report=log;
             Title="项目便签 · Project Notes";WindowStyle=WindowStyle.None;AllowsTransparency=true;
             Background=System.Windows.Media.Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;
             ResizeMode=ResizeMode.NoResize;Width=width;Height=42;
@@ -68,7 +67,6 @@ namespace GlassDeskCalendar
         public void Align()
         {
             if(placement==null || shuttingDown)return;
-            placement.Pin(isPinned());
             Rectangle work=Screen.FromRectangle(calendarBounds()).WorkingArea;
             int w=Math.Min(work.Width,(int)Math.Ceiling(width*placement.Scale));
             placement.Place(new Rectangle(work.Right-w,work.Top,w,work.Height));

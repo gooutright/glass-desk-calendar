@@ -10,10 +10,17 @@ namespace GlassDeskCalendar
     internal sealed class DesktopPlacement
     {
         [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] struct WindowPlacement
+        {
+            public int Length, Flags, ShowCommand;
+            public Point MinPosition, MaxPosition;
+            public Rect NormalPosition;
+        }
         delegate bool WindowEnumerator(IntPtr hwnd, IntPtr parameter);
         [DllImport("user32.dll")] static extern bool EnumWindows(WindowEnumerator callback, IntPtr parameter);
         [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string name, string title);
         [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+        [DllImport("user32.dll")] static extern bool GetWindowPlacement(IntPtr hwnd, ref WindowPlacement placement);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out Point p);
         [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
         [DllImport("user32.dll")] static extern bool ReleaseCapture();
@@ -50,6 +57,22 @@ namespace GlassDeskCalendar
         public bool Pinned { get; private set; }
         public double Scale { get { return Math.Max(96u, GetDpiForWindow(window)) / 96.0; } }
         public Rectangle Bounds { get { Rect r; GetWindowRect(window, out r); return Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom); } }
+        public Rectangle RestoredBounds
+        {
+            get {
+                if (!IsIconic(window)) return Bounds;
+                var placement=new WindowPlacement { Length=Marshal.SizeOf(typeof(WindowPlacement)) };
+                if (!GetWindowPlacement(window,ref placement)) return DefaultBounds();
+                Rect r=placement.NormalPosition;
+                Rectangle result=Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom);
+                // Normal windows report workspace coordinates. Tool windows report screen coordinates.
+                if ((GetWindowLong(window,-20)&0x80)==0) {
+                    Screen monitor=Screen.FromHandle(window);
+                    result.Offset(monitor.WorkingArea.Left-monitor.Bounds.Left,monitor.WorkingArea.Top-monitor.Bounds.Top);
+                }
+                return result;
+            }
+        }
         public DesktopPlacement(IntPtr hwnd, Action onFinish, int minWidth=350, int minHeight=320, int radius=0)
         {
             window = hwnd; save = onFinish;
