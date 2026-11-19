@@ -6,3 +6,41 @@
 __pycache__/
 *.user
 *.suo
+
+# Local calendar profiles, activity logs and credentials
+WebView2/
+EBWebView/
+Local Storage/
+IndexedDB/
+window.txt
+window.txt.tmp
+last-error.txt
+*.ldb
+*.sqlite*
+*.db
+*.log
+.env
+.env.*
+*.pfx
+*.key
+*.lnk
+
+# Personal exports, attachments, and screenshots
+.glass-calendar-*.tmp
+*.csv
+*.html
+!/web/index.html
+!/web/dock.html
+*.zip
+codex-clipboard-*
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.avif
+*.bmp
+*.heic
+*.heif
+*.tif
+*.tiff

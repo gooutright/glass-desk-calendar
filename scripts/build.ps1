@@ -1,7 +1,7 @@
 param([switch]$AppOnly)
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $root = Split-Path $PSScriptRoot -Parent
 $build = Join-Path $root 'build'
 $app = Join-Path $build 'app'
@@ -45,14 +45,30 @@ if ($AppOnly) { Write-Output (Join-Path $app 'GlassDeskCalendar.exe'); return }
 $wix = Expand-Tool 'wix314' 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip' '6AC824E1642D6F7277D0ED7EA09411A508F6116BA6FAE0AA5F2C7DAA2FF43D31' 'candle.exe'
 $name = 'GlassDeskCalendar-1.3.1-win-x64'
 $object = Join-Path $build 'installer.wixobj'
-& (Join-Path $wix 'candle.exe') -nologo -arch x64 "-dAppDir=$app" "-dIcon=$icon" -out $object (Join-Path $root 'packaging/installer.wxs')
+$installerManifest = Join-Path $root 'packaging/installer.wxs'
+& (Join-Path $wix 'candle.exe') -nologo -arch x64 "-dAppDir=$app" "-dIcon=$icon" -out $object $installerManifest
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
 & (Join-Path $wix 'light.exe') -nologo -sval -spdb -out (Join-Path $dist "$name.msi") $object
 if ($LASTEXITCODE -ne 0) { throw "MSI linking failed ($LASTEXITCODE)" }
 $zip = Join-Path $dist "$name-portable.zip"
 $tmp = Join-Path $build 'portable.new.zip'
 if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp }
-[IO.Compression.ZipFile]::CreateFromDirectory($app,$tmp,[IO.Compression.CompressionLevel]::Optimal,$false)
+# Both packages use the installer's file list. Local exports or images left in
+# the build directory must never become part of a portable download.
+$manifest = New-Object System.Xml.XmlDocument
+$manifest.Load($installerManifest)
+$prefix = '$(var.AppDir)/'
+$archive = [IO.Compression.ZipFile]::Open($tmp,[IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($file in $manifest.SelectNodes('//*[local-name()="File"]')) {
+        $source = $file.GetAttribute('Source')
+        if (!$source.StartsWith($prefix,[StringComparison]::Ordinal)) { throw "Unexpected installer source: $source" }
+        $nameInZip = $source.Substring($prefix.Length).Replace('\','/')
+        if ([IO.Path]::IsPathRooted($nameInZip) -or $nameInZip.Split('/') -contains '..') { throw "Invalid package path: $nameInZip" }
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive, (Join-Path $app $nameInZip), $nameInZip, [IO.Compression.CompressionLevel]::Optimal)
+    }
+} finally { $archive.Dispose() }
 Move-Item -LiteralPath $tmp -Destination $zip -Force
 $lines = @("$name.msi","$name-portable.zip") | ForEach-Object {
     (Get-FileHash (Join-Path $dist $_)).Hash.ToLowerInvariant() + '  ' + $_
